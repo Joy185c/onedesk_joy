@@ -1,0 +1,7 @@
+<svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M18 3L32 10.5V25.5L18 33L4 25.5V10.5L18 3Z" fill="#082F1B" stroke="#12452C" stroke-width="1.5"/>
+  <path d="M18 7.5L28 13V23L18 28.5L8 23V13L18 7.5Z" fill="#12452C"/>
+  <rect x="13" y="13" width="10" height="10" rx="2.5" transform="rotate(45 18 18)" fill="#20E34A"/>
+  <circle cx="18" cy="18" r="2" fill="#06351F"/>
+</svg>
+
