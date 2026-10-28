@@ -1,17 +1,18 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ChevronDown, Plus, Check, Building2, Sparkles } from 'lucide-react';
-import { Workspace } from '@/lib/types';
-import { sampleWorkspaces, currentWorkspace } from '@/lib/mockData';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface WorkspaceSwitcherProps {
   collapsed?: boolean;
 }
 
 export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed = false }) => {
+  const router = useRouter();
+  const { workspace, userWorkspaces, isDemoMode } = useWorkspace();
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedWs, setSelectedWs] = useState<Workspace>(currentWorkspace);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,15 +25,22 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const initials = workspace.name
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase() || 'WS';
+
   if (collapsed) {
     return (
       <div className="flex justify-center py-2 px-2">
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="w-10 h-10 rounded-xl bg-[#06351F] border border-[#14482E] text-white flex items-center justify-center font-bold text-sm hover:bg-[#12452C] transition-colors"
-          title={selectedWs.name}
+          title={workspace.name}
         >
-          {selectedWs.name.substring(0, 2).toUpperCase()}
+          {initials}
         </button>
       </div>
     );
@@ -46,15 +54,15 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed 
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-[#12452C] border border-[#20E34A]/30 flex items-center justify-center font-bold text-white text-xs shrink-0 group-hover:border-[#20E34A] transition-colors">
-            {selectedWs.name.substring(0, 2).toUpperCase()}
+            {initials}
           </div>
           <div className="min-w-0">
             <div className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
-              <span>{selectedWs.name}</span>
+              <span>{workspace.name}</span>
               <span className="w-1.5 h-1.5 rounded-full bg-[#20E34A]" />
             </div>
             <div className="text-[11px] text-[#849E8E] truncate">
-              {selectedWs.projectsCount} projects · {selectedWs.membersCount} members
+              {workspace.projectsCount} {workspace.projectsCount === 1 ? 'project' : 'projects'} · Active workspace
             </div>
           </div>
         </div>
@@ -65,49 +73,68 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed 
       {isOpen && (
         <div className="absolute left-3 right-3 top-full mt-1.5 z-50 rounded-xl bg-[#06351F] border border-[#14482E] shadow-2xl p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="text-[10px] font-semibold tracking-wider text-[#849E8E] px-2 py-1 uppercase">
-            Workspaces
+            Your Workspaces
           </div>
-          <div className="space-y-0.5">
-            {sampleWorkspaces.map((ws) => {
-              const isSelected = ws.id === selectedWs.id;
-              return (
-                <button
-                  key={ws.id}
-                  onClick={() => {
-                    setSelectedWs(ws);
-                    setIsOpen(false);
-                  }}
-                  className={`w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium transition-colors ${
-                    isSelected
-                      ? 'bg-[#175235] text-white font-semibold'
-                      : 'text-[#D2DFD7] hover:bg-[#12452C] hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <Building2 className="w-3.5 h-3.5 text-[#20E34A]" />
-                    <span className="truncate">{ws.name}</span>
-                  </div>
-                  {isSelected && <Check className="w-3.5 h-3.5 text-[#20E34A] shrink-0" />}
-                </button>
-              );
-            })}
+          <div className="space-y-0.5 max-h-48 overflow-y-auto">
+            {userWorkspaces.length > 0 ? (
+              userWorkspaces.map((ws) => {
+                const isSelected = ws.slug === workspace.slug;
+                return (
+                  <button
+                    key={ws.id}
+                    onClick={() => {
+                      setIsOpen(false);
+                      router.push(`/w/${ws.slug}`);
+                    }}
+                    className={`w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium transition-colors ${
+                      isSelected
+                        ? 'bg-[#175235] text-white font-semibold'
+                        : 'text-[#D2DFD7] hover:bg-[#12452C] hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <Building2 className="w-3.5 h-3.5 text-[#20E34A]" />
+                      <span className="truncate">{ws.name}</span>
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-[#20E34A] shrink-0" />}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-2 py-1.5 text-[11px] text-[#849E8E]">
+                {workspace.name} (Current)
+              </div>
+            )}
           </div>
 
           <div className="h-[1px] bg-[#14482E] my-1.5" />
 
+          {/* Demo workspace link */}
           <button
             onClick={() => {
               setIsOpen(false);
-              alert('Create Workspace dialog (configured in settings)');
+              router.push('/w/factor-labs');
+            }}
+            className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-[#849E8E] hover:text-white hover:bg-[#12452C] transition-colors"
+          >
+            <div className="flex items-center gap-2 truncate">
+              <Sparkles className="w-3.5 h-3.5 text-[#20E34A]" />
+              <span>Factor Labs (Demo)</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              router.push('/onboarding');
             }}
             className="w-full flex items-center gap-2 p-2 rounded-lg text-xs font-medium text-[#20E34A] hover:bg-[#12452C] transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Create Workspace</span>
+            <span>Create New Workspace</span>
           </button>
         </div>
       )}
     </div>
   );
 };
-

@@ -15,17 +15,17 @@ interface ExecutiveKpisProps {
 }
 
 export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = ({ data }) => {
-  const completionRate = Math.round((data.completedTasks / data.totalTasks) * 100);
+  const completionRate = data.totalTasks > 0 ? Math.round((data.completedTasks / data.totalTasks) * 100) : 0;
 
   const kpis = [
     {
       label: 'Active Projects',
       value: data.activeProjects,
-      subtext: '4 on schedule',
+      subtext: data.activeProjects > 0 ? `${data.activeProjects} on schedule` : 'No active projects',
       icon: Briefcase,
       color: 'text-[#082F1B]',
       bgColor: 'bg-[#F0F1F3]',
-      indicator: 'Stable',
+      indicator: data.activeProjects > 0 ? 'Stable' : 'Setup',
       indicatorColor: 'text-[#064E24] bg-[#E9FBEA]',
     },
     {
@@ -41,22 +41,22 @@ export const ExecutiveKpis: React.FC<ExecutiveKpisProps> = ({ data }) => {
     {
       label: 'Overdue Tasks',
       value: data.overdueTasks,
-      subtext: 'Across 2 projects',
+      subtext: data.overdueTasks > 0 ? `${data.overdueTasks} across projects` : 'None overdue',
       icon: Clock,
       color: 'text-rose-600',
       bgColor: 'bg-rose-50',
-      indicator: 'Requires action',
-      indicatorColor: 'text-rose-700 bg-rose-50',
+      indicator: data.overdueTasks > 0 ? 'Requires action' : 'Clear',
+      indicatorColor: data.overdueTasks > 0 ? 'text-rose-700 bg-rose-50' : 'text-[#064E24] bg-[#E9FBEA]',
     },
     {
       label: 'Pending Reviews',
       value: data.pendingApprovals,
-      subtext: 'Awaiting manager signoff',
+      subtext: data.pendingApprovals > 0 ? 'Awaiting signoff' : 'Queue clear',
       icon: FileCheck,
       color: 'text-amber-600',
       bgColor: 'bg-amber-50',
-      indicator: 'In queue',
-      indicatorColor: 'text-amber-700 bg-amber-50',
+      indicator: data.pendingApprovals > 0 ? 'In queue' : 'Up to date',
+      indicatorColor: data.pendingApprovals > 0 ? 'text-amber-700 bg-amber-50' : 'text-[#064E24] bg-[#E9FBEA]',
     },
     {
       label: 'Weekly Velocity',

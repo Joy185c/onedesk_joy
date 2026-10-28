@@ -19,7 +19,7 @@ import { ProjectSummary } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AvatarGroup } from '@/components/ui/avatar';
-import { currentWorkspace } from '@/lib/mockData';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface ProjectHeaderProps {
   project: ProjectSummary;
@@ -31,7 +31,8 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   onOpenQuickCreate,
 }) => {
   const pathname = usePathname();
-  const slug = currentWorkspace.slug;
+  const { workspace } = useWorkspace();
+  const slug = workspace.slug;
   const baseUrl = `/w/${slug}/projects/${project.id}`;
 
   const tabs = [

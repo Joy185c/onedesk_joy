@@ -34,17 +34,25 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthPage =
     request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/signup') ||
-    request.nextUrl.pathname.startsWith('/forgot-password');
+    request.nextUrl.pathname.startsWith('/signup');
 
+  const isOnboardingPage = request.nextUrl.pathname.startsWith('/onboarding');
   const isWorkspacePage = request.nextUrl.pathname.startsWith('/w/');
+  const isFactorLabsDemo = request.nextUrl.pathname.startsWith('/w/factor-labs');
 
-  // If user is not authenticated and attempts to view workspace, redirect to /login
-  // (In dev demo mode when unconfigured, allow fallback to factor-labs)
-  if (!user && isWorkspacePage && !process.env.NEXT_PUBLIC_DEMO_BYPASS) {
-    // Only redirect if database is configured and user is genuinely logging in
+  // If user is authenticated and hits /login or /signup, redirect to /
+  if (user && isAuthPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/';
+    return NextResponse.redirect(url);
+  }
+
+  // If user is not authenticated and hits /onboarding or private workspace, redirect to /login
+  if (!user && (isOnboardingPage || (isWorkspacePage && !isFactorLabsDemo))) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
   }
 
   return supabaseResponse;
 }
-

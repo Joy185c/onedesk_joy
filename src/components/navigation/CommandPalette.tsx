@@ -12,7 +12,8 @@ import {
   X,
   Plus,
 } from 'lucide-react';
-import { sampleProjects, sampleTasks, sampleUsers, currentWorkspace } from '@/lib/mockData';
+import { sampleProjects, sampleTasks, sampleUsers } from '@/lib/mockData';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const router = useRouter();
+  const { workspace } = useWorkspace();
 
   // Keyboard shortcut listener for Ctrl+K / Cmd+K and Esc
   useEffect(() => {
@@ -118,7 +120,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               {filteredProjects.map((p) => (
                 <button
                   key={p.id}
-                  onClick={() => navigateTo(`/w/${currentWorkspace.slug}/projects/${p.id}`)}
+                  onClick={() => navigateTo(`/w/${workspace.slug}/projects/${p.id}`)}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[#18251D] hover:bg-[#F0F1F3] transition-colors group"
                 >
                   <div className="flex items-center gap-2.5 truncate">
@@ -142,7 +144,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               {filteredTasks.map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => navigateTo(`/w/${currentWorkspace.slug}/projects/${t.projectId}`)}
+                  onClick={() => navigateTo(`/w/${workspace.slug}/projects/${t.projectId}`)}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[#18251D] hover:bg-[#F0F1F3] transition-colors group"
                 >
                   <div className="flex items-center gap-2.5 truncate">

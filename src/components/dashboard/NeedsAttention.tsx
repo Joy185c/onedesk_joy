@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
 import { formatDate } from '@/lib/utils';
-import { currentWorkspace } from '@/lib/mockData';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface NeedsAttentionProps {
   blockedTasks: Task[];
@@ -19,7 +19,8 @@ export const NeedsAttention: React.FC<NeedsAttentionProps> = ({
   reviewRequests,
   overdueTasks,
 }) => {
-  const slug = currentWorkspace.slug;
+  const { workspace } = useWorkspace();
+  const slug = workspace.slug;
 
   const totalUrgent = blockedTasks.length + reviewRequests.length + overdueTasks.length;
 

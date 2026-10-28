@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, User, Building2, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Logo } from '@/components/branding/Logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,6 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [workspaceName, setWorkspaceName] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -34,7 +33,7 @@ export default function SignupPage() {
     try {
       const supabase = createClient();
 
-      // 1. Sign up user with metadata
+      // Sign up user with full name in user metadata
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -51,44 +50,12 @@ export default function SignupPage() {
         throw new Error('Registration failed. Please try again.');
       }
 
-      // If user session is active (or email auto-confirmed)
+      // If active session exists (auto-confirmed) -> redirect directly to onboarding
       if (authData.session) {
-        // Create initial workspace
-        const slug = workspaceName
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, '-')
-          .replace(/-+/g, '-')
-          .replace(/^-|-$/g, '') || `ws-${Date.now().toString().slice(-4)}`;
-
-        const { data: wsData, error: wsError } = await supabase
-          .from('workspaces')
-          .insert({
-            name: workspaceName,
-            slug,
-            owner_id: authData.user.id,
-          })
-          .select()
-          .single();
-
-        if (wsError) {
-          console.warn('Workspace creation notice:', wsError.message);
-          router.push('/onboarding');
-          return;
-        }
-
-        // Add creator as workspace owner
-        await supabase.from('workspace_members').insert({
-          workspace_id: wsData.id,
-          user_id: authData.user.id,
-          role: 'owner',
-          status: 'active',
-          job_title: 'Workspace Owner',
-        });
-
-        router.push(`/w/${wsData.slug}`);
+        router.push('/onboarding');
       } else {
         setSuccessMsg(
-          'Account created! Please check your email to confirm your account, or sign in if confirmation is disabled.'
+          'Account created successfully! A confirmation link has been sent to your email. Please verify your address, then sign in to complete your workspace onboarding.'
         );
       }
     } catch (err: any) {
@@ -105,10 +72,10 @@ export default function SignupPage() {
           <Logo variant="light" size="lg" />
         </Link>
         <h2 className="text-2xl font-extrabold text-[#18251D] tracking-tight">
-          Create your OneDesk workspace
+          Create your OneDesk account
         </h2>
         <p className="mt-1.5 text-xs text-[#778079]">
-          Get your agency or engineering team set up in 60 seconds.
+          Join your team or start a brand new workspace in seconds.
         </p>
       </div>
 
@@ -137,37 +104,25 @@ export default function SignupPage() {
                 type="text"
                 required
                 icon={<User className="w-4 h-4" />}
-                placeholder="Alex Sterling"
+                placeholder="e.g. Shuvo Ahmed"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                autoFocus
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-[#18251D] mb-1.5">
-                Work Email *
+                Email Address *
               </label>
               <Input
                 type="email"
                 required
                 icon={<Mail className="w-4 h-4" />}
-                placeholder="alex@factorlabs.agency"
+                placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#18251D] mb-1.5">
-                Workspace / Agency Name *
-              </label>
-              <Input
-                type="text"
-                required
-                icon={<Building2 className="w-4 h-4" />}
-                placeholder="Factor Labs"
-                value={workspaceName}
-                onChange={(e) => setWorkspaceName(e.target.value)}
+                autoComplete="email"
               />
             </div>
 
@@ -193,7 +148,7 @@ export default function SignupPage() {
               disabled={loading}
             >
               {loading ? (
-                <span>Creating workspace...</span>
+                <span>Creating account...</span>
               ) : (
                 <>
                   <span>Create Account</span>
@@ -219,4 +174,3 @@ export default function SignupPage() {
     </div>
   );
 }
-

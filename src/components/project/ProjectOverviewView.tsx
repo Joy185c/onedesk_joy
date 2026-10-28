@@ -18,7 +18,7 @@ import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarGroup } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { formatDate } from '@/lib/utils';
-import { currentWorkspace } from '@/lib/mockData';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface ProjectOverviewViewProps {
   project: ProjectSummary;
@@ -31,7 +31,8 @@ export const ProjectOverviewView: React.FC<ProjectOverviewViewProps> = ({
   projectTasks,
   onOpenQuickCreate,
 }) => {
-  const slug = currentWorkspace.slug;
+  const { workspace } = useWorkspace();
+  const slug = workspace.slug;
 
   const statusCounts = {
     todo: projectTasks.filter((t) => t.status === 'todo').length,

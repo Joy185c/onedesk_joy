@@ -8,6 +8,10 @@ import {
   TeamMemberWorkload,
   ActivityItem,
   ExecutiveKpiData,
+  Channel,
+  ChatMessage,
+  TaskComment,
+  AppNotification,
 } from './types';
 
 export const currentUser: UserProfile = {
@@ -426,4 +430,170 @@ export const recentActivityFeed: ActivityItem[] = [
     projectName: 'Mobile Banking App',
   },
 ];
+
+export const sampleChannels: Channel[] = [
+  {
+    id: 'chan-announcements',
+    workspaceId: 'ws-factor-labs',
+    name: 'announcements',
+    description: 'Workspace-wide announcements and release updates',
+    type: 'public',
+    isArchived: false,
+    unreadCount: 1,
+    topic: 'Q4 2026 Deliverables & Milestones',
+  },
+  {
+    id: 'chan-general',
+    workspaceId: 'ws-factor-labs',
+    name: 'general',
+    description: 'Everyday team discussions, questions, and ideas',
+    type: 'public',
+    isArchived: false,
+    unreadCount: 3,
+    topic: 'Team coordination & daily syncs',
+  },
+  {
+    id: 'chan-project-real-estate',
+    workspaceId: 'ws-factor-labs',
+    projectId: 'proj-real-estate',
+    projectName: 'Real Estate Platform',
+    projectKey: 'RES',
+    name: 'general',
+    description: 'Dedicated stream for Real Estate Platform deliverable',
+    type: 'public',
+    isArchived: false,
+    unreadCount: 0,
+    topic: 'Sprint 3 Map Search & Image Carousel',
+  },
+  {
+    id: 'chan-project-mobile-app',
+    workspaceId: 'ws-factor-labs',
+    projectId: 'proj-mobile-app',
+    projectName: 'Mobile Banking App',
+    projectKey: 'MOB',
+    name: 'general',
+    description: 'Dedicated stream for Mobile Banking App',
+    type: 'public',
+    isArchived: false,
+    unreadCount: 2,
+    topic: 'Biometric Auth & Handshake Security',
+  },
+];
+
+export const sampleChatMessages: Record<string, ChatMessage[]> = {
+  'chan-general': [
+    {
+      id: 'msg-1',
+      channelId: 'chan-general',
+      author: sampleUsers[2], // Marcus
+      body: 'Hey team, the initial Mapbox integration is deployed on staging. Check out the boundary polygon filtering when you get a chance!',
+      attachments: [],
+      isPinned: false,
+      isEdited: false,
+      createdAt: '2026-10-28T09:15:00Z',
+      reactions: [
+        { emoji: '🚀', count: 3, userIds: ['usr-1', 'usr-2', 'usr-4'] },
+        { emoji: '🔥', count: 2, userIds: ['usr-1', 'usr-5'] },
+      ],
+    },
+    {
+      id: 'msg-2',
+      channelId: 'chan-general',
+      author: sampleUsers[1], // Elena
+      body: 'Looks fantastic @Marcus! I checked the mobile viewport as well. The touch hitboxes on the cluster pins feel buttery smooth.',
+      attachments: [],
+      isPinned: false,
+      isEdited: false,
+      createdAt: '2026-10-28T09:22:00Z',
+      reactions: [{ emoji: '❤️', count: 1, userIds: ['usr-3'] }],
+    },
+    {
+      id: 'msg-3',
+      channelId: 'chan-general',
+      author: currentUser, // Alex
+      body: 'Great velocity everyone. Let’s make sure review approval gate is enforced before merging the PR to main branch.',
+      attachments: [],
+      isPinned: true,
+      isEdited: false,
+      createdAt: '2026-10-28T09:35:00Z',
+      reactions: [{ emoji: '👍', count: 4, userIds: ['usr-2', 'usr-3', 'usr-4', 'usr-5'] }],
+    },
+  ],
+  'chan-announcements': [
+    {
+      id: 'msg-ann-1',
+      channelId: 'chan-announcements',
+      author: currentUser,
+      body: '📢 OneDesk v2.0 Phase 4 Realtime Collaboration is officially live! Project channels, direct messaging, and review gates are fully secured with PostgreSQL RLS.',
+      attachments: [],
+      isPinned: true,
+      isEdited: false,
+      createdAt: '2026-10-28T08:00:00Z',
+      reactions: [{ emoji: '🎉', count: 5, userIds: ['usr-2', 'usr-3', 'usr-4', 'usr-5', 'usr-6'] }],
+    },
+  ],
+};
+
+export const sampleTaskComments: Record<string, TaskComment[]> = {
+  'task-1': [
+    {
+      id: 'tcom-1',
+      taskId: 'task-1',
+      author: sampleUsers[1],
+      content: 'I verified the Figma spec for the boundary drawer. Please ensure the contrast ratio meets WCAG 2.1 AA.',
+      attachments: [],
+      isEdited: false,
+      createdAt: '2026-10-28T10:00:00Z',
+    },
+    {
+      id: 'tcom-2',
+      taskId: 'task-1',
+      author: sampleUsers[2],
+      content: 'Updated the stroke to #082F1B with 4.5:1 contrast against light cards. Ready for testing!',
+      attachments: [],
+      isEdited: false,
+      createdAt: '2026-10-28T11:15:00Z',
+    },
+  ],
+};
+
+export const sampleNotifications: AppNotification[] = [
+  {
+    id: 'notif-1',
+    workspaceId: 'ws-factor-labs',
+    recipientId: 'usr-1',
+    actor: sampleUsers[2],
+    type: 'review_requested',
+    title: 'Review Requested',
+    body: 'Marcus Vance submitted "Interactive map search" for sign-off.',
+    linkUrl: '/w/factor-labs/projects/proj-real-estate',
+    isRead: false,
+    createdAt: '10 min ago',
+  },
+  {
+    id: 'notif-2',
+    workspaceId: 'ws-factor-labs',
+    recipientId: 'usr-1',
+    actor: sampleUsers[1],
+    type: 'comment',
+    title: 'New Comment',
+    body: 'Elena Rostova commented on "Brand Identity & Guidelines".',
+    linkUrl: '/w/factor-labs/projects/proj-brand-identity',
+    isRead: false,
+    createdAt: '45 min ago',
+  },
+  {
+    id: 'notif-3',
+    workspaceId: 'ws-factor-labs',
+    recipientId: 'usr-1',
+    actor: sampleUsers[3],
+    type: 'assigned',
+    title: 'Assigned to Deliverable',
+    body: 'You were assigned as lead for "Mobile Banking App".',
+    linkUrl: '/w/factor-labs/projects/proj-mobile-app',
+    isRead: true,
+    createdAt: 'Yesterday',
+  },
+];
+
 

@@ -18,7 +18,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
-import { sampleUsers, currentWorkspace } from '@/lib/mockData';
+import { sampleUsers } from '@/lib/mockData';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface PendingInvite {
   id: string;
@@ -29,6 +30,7 @@ interface PendingInvite {
 }
 
 export default function WorkspaceMembersPage() {
+  const { workspace } = useWorkspace();
   const [members, setMembers] = useState(sampleUsers);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'guest'>('member');
@@ -80,7 +82,7 @@ export default function WorkspaceMembersPage() {
   };
 
   const handleRemoveMember = (userId: string, name: string) => {
-    if (confirm(`Are you sure you want to remove ${name} from ${currentWorkspace.name}? Their access will be immediately revoked.`)) {
+    if (confirm(`Are you sure you want to remove ${name} from ${workspace.name}? Their access will be immediately revoked.`)) {
       setMembers(members.filter((m) => m.id !== userId));
     }
   };
@@ -110,7 +112,7 @@ export default function WorkspaceMembersPage() {
             Invite New Teammate
           </CardTitle>
           <p className="text-xs text-[#778079]">
-            Invited users receive an email invitation token linked strictly to {currentWorkspace.name}.
+            Invited users receive an email invitation token linked strictly to {workspace.name}.
           </p>
         </CardHeader>
         <CardContent>
@@ -161,7 +163,7 @@ export default function WorkspaceMembersPage() {
             <Badge variant="lime">Tenant Isolated</Badge>
           </div>
           <p className="text-xs text-[#778079]">
-            Active members authorized to participate in projects within {currentWorkspace.name}.
+            Active members authorized to participate in projects within {workspace.name}.
           </p>
         </CardHeader>
 

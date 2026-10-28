@@ -7,14 +7,15 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { AvatarGroup } from '@/components/ui/avatar';
 import { formatDate } from '@/lib/utils';
-import { currentWorkspace } from '@/lib/mockData';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface ProjectPortfolioProps {
   projects: ProjectSummary[];
 }
 
 export const ProjectPortfolio: React.FC<ProjectPortfolioProps> = ({ projects }) => {
-  const slug = currentWorkspace.slug;
+  const { workspace } = useWorkspace();
+  const slug = workspace.slug;
 
   const healthLabels: Record<string, { label: string; variant: 'on_track' | 'at_risk' | 'off_track' }> = {
     on_track: { label: 'On Track', variant: 'on_track' },

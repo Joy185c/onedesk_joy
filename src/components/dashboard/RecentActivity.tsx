@@ -4,14 +4,15 @@ import { Activity, CheckCircle, MessageSquare, Plus, FileCheck } from 'lucide-re
 import { ActivityItem } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Avatar } from '@/components/ui/avatar';
-import { currentWorkspace } from '@/lib/mockData';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface RecentActivityProps {
   activities: ActivityItem[];
 }
 
 export const RecentActivity: React.FC<RecentActivityProps> = ({ activities }) => {
-  const slug = currentWorkspace.slug;
+  const { workspace } = useWorkspace();
+  const slug = workspace.slug;
 
   const actionIcons = {
     created_task: { icon: Plus, color: 'text-blue-600 bg-blue-50' },

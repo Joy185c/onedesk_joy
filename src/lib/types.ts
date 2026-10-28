@@ -125,3 +125,159 @@ export interface ExecutiveKpiData {
   weeklyProgressTrend: { day: string; completed: number; created: number }[];
 }
 
+export type ChannelType = 'public' | 'private' | 'dm';
+
+export interface Channel {
+  id: string;
+  workspaceId: string;
+  projectId?: string;
+  projectName?: string;
+  projectKey?: string;
+  name: string;
+  description?: string;
+  type: ChannelType;
+  topic?: string;
+  isArchived: boolean;
+  unreadCount?: number;
+  members?: UserProfile[];
+  lastMessage?: {
+    body: string;
+    createdAt: string;
+    authorName: string;
+  };
+}
+
+export interface ChatMessage {
+  id: string;
+  channelId: string;
+  author: UserProfile;
+  parentMessageId?: string;
+  body: string;
+  attachments?: any[];
+  isPinned?: boolean;
+  isEdited?: boolean;
+  createdAt: string;
+  reactions?: { emoji: string; count: number; userIds: string[] }[];
+}
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  author: UserProfile;
+  parentCommentId?: string;
+  content: string;
+  attachments?: any[];
+  isEdited?: boolean;
+  createdAt: string;
+}
+
+export type NotificationType =
+  | 'mention'
+  | 'assigned'
+  | 'review_requested'
+  | 'review_decided'
+  | 'comment'
+  | 'system';
+
+export interface AppNotification {
+  id: string;
+  workspaceId: string;
+  recipientId: string;
+  actor?: UserProfile;
+  type: NotificationType;
+  title: string;
+  body: string;
+  linkUrl?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+// ------------------------------------------------------------------------------
+// Phase 5: Productivity Types
+// ------------------------------------------------------------------------------
+
+export interface DocumentItem {
+  id: string;
+  workspaceId: string;
+  projectId?: string;
+  projectName?: string;
+  parentDocId?: string;
+  title: string;
+  content: string;
+  icon?: string;
+  isPublished: boolean;
+  author?: UserProfile;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type GoalStatus = 'on_track' | 'at_risk' | 'off_track' | 'completed';
+
+export interface KeyResult {
+  id: string;
+  goalId: string;
+  title: string;
+  initialValue: number;
+  currentValue: number;
+  targetValue: number;
+  unit: string;
+}
+
+export interface Goal {
+  id: string;
+  workspaceId: string;
+  projectId?: string;
+  projectName?: string;
+  title: string;
+  description?: string;
+  status: GoalStatus;
+  progressPercent: number;
+  targetDate?: string;
+  owner?: UserProfile;
+  keyResults?: KeyResult[];
+  createdAt: string;
+}
+
+export interface TimeEntry {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  projectName?: string;
+  projectKey?: string;
+  taskId?: string;
+  taskTitle?: string;
+  taskNumber?: number;
+  user: UserProfile;
+  durationMinutes: number;
+  description?: string;
+  entryDate: string;
+  createdAt: string;
+}
+
+export interface Sprint {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  projectName?: string;
+  name: string;
+  goal?: string;
+  startDate?: string;
+  endDate?: string;
+  status: 'planning' | 'active' | 'completed';
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string;
+  type: 'task' | 'milestone' | 'goal' | 'sprint';
+  priority?: TaskPriority;
+  projectKey?: string;
+  projectName?: string;
+  projectId?: string;
+  taskId?: string;
+  status?: string;
+}
+
+
+

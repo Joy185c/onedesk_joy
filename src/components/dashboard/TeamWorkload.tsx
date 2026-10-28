@@ -5,14 +5,15 @@ import { TeamMemberWorkload } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Avatar } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
-import { currentWorkspace } from '@/lib/mockData';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface TeamWorkloadProps {
   workload: TeamMemberWorkload[];
 }
 
 export const TeamWorkload: React.FC<TeamWorkloadProps> = ({ workload }) => {
-  const slug = currentWorkspace.slug;
+  const { workspace } = useWorkspace();
+  const slug = workspace.slug;
 
   return (
     <Card className="h-full">

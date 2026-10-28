@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -23,11 +23,17 @@ import {
   PanelLeftOpen,
   Briefcase,
   FolderOpen,
+  LogOut,
 } from 'lucide-react';
 import { Logo } from '@/components/branding/Logo';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { Avatar } from '@/components/ui/avatar';
-import { sampleSpaces, currentUser, currentWorkspace } from '@/lib/mockData';
+import { sampleSpaces } from '@/lib/mockData';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { getWorkspaceProjects } from '@/lib/services/projectService';
+import { ProjectSummary } from '@/lib/types';
+import { CreateProjectModal } from '@/components/project/CreateProjectModal';
+import { createClient } from '@/lib/supabase/client';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -41,7 +47,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
   className = '',
 }) => {
   const pathname = usePathname();
-  const slug = currentWorkspace.slug;
+  const { user, workspace, signOut, isDemoMode } = useWorkspace();
+  const slug = workspace.slug;
+  const [sidebarProjects, setSidebarProjects] = useState<ProjectSummary[]>([]);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+
+  useEffect(() => {
+    async function loadSidebarProjects() {
+      if (isDemoMode) {
+        setSidebarProjects([]);
+      } else {
+        try {
+          let wsId = workspace.id;
+          if (!wsId && slug && slug !== 'factor-labs') {
+            const supabase = createClient();
+            const { data: ws } = await supabase
+              .from('workspaces')
+              .select('id')
+              .eq('slug', slug)
+              .maybeSingle();
+            if (ws) wsId = ws.id;
+          }
+          if (wsId) {
+            const projs = await getWorkspaceProjects(wsId);
+            setSidebarProjects(projs);
+          }
+        } catch (err) {
+          console.error('Sidebar projects error:', err);
+        }
+      }
+    }
+    loadSidebarProjects();
+  }, [workspace.id, isDemoMode, pathname, slug]);
 
   // Space expansion state
   const [expandedSpaces, setExpandedSpaces] = useState<Record<string, boolean>>({
@@ -211,9 +248,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <div className="flex items-center justify-between px-3 mb-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#849E8E]">
-                Spaces & Projects
+                {isDemoMode ? 'Spaces & Projects' : `Projects (${sidebarProjects.length})`}
               </span>
               <button
+                onClick={() => setCreateProjectOpen(true)}
                 className="p-1 rounded text-[#849E8E] hover:text-white hover:bg-[#12452C] transition-colors"
                 title="Create Project"
               >
@@ -222,61 +260,99 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="space-y-1">
-              {sampleSpaces.map((space) => {
-                const isExpanded = expandedSpaces[space.id];
-                return (
-                  <div key={space.id} className="space-y-0.5">
-                    {/* Space Row */}
-                    <button
-                      onClick={() => toggleSpace(space.id)}
-                      className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#849E8E] hover:text-white hover:bg-[#06351F] transition-colors group"
+              {isDemoMode ? (
+                sampleSpaces.map((space) => {
+                  const isExpanded = expandedSpaces[space.id];
+                  return (
+                    <div key={space.id} className="space-y-0.5">
+                      {/* Space Row */}
+                      <button
+                        onClick={() => toggleSpace(space.id)}
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#849E8E] hover:text-white hover:bg-[#06351F] transition-colors group"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          {isExpanded ? (
+                            <ChevronDown className="w-3 h-3 text-[#849E8E] shrink-0" />
+                          ) : (
+                            <ChevronRight className="w-3 h-3 text-[#849E8E] shrink-0" />
+                          )}
+                          <Briefcase className="w-3.5 h-3.5 text-[#849E8E] group-hover:text-white" />
+                          <span className="truncate">{space.name}</span>
+                        </div>
+                        <span className="text-[10px] bg-[#12452C] text-[#849E8E] px-1.5 py-0.2 rounded-full">
+                          {space.projects?.length || 0}
+                        </span>
+                      </button>
+
+                      {/* Sub-projects list */}
+                      {isExpanded && space.projects && (
+                        <div className="pl-6 space-y-0.5">
+                          {space.projects.map((proj) => {
+                            const projHref = `/w/${slug}/projects/${proj.id}`;
+                            const isProjActive = pathname.startsWith(projHref);
+
+                            return (
+                              <Link
+                                key={proj.id}
+                                href={projHref}
+                                className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 group relative ${
+                                  isProjActive
+                                    ? 'bg-[#175235] text-white font-semibold'
+                                    : 'text-[#D2DFD7] hover:bg-[#06351F] hover:text-white'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#20E34A] shrink-0" />
+                                  <span className="truncate">{proj.name}</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-[#849E8E] px-1 py-0.2 rounded bg-[#06351F] shrink-0">
+                                  {proj.key}
+                                </span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : sidebarProjects.length === 0 ? (
+                <div className="px-3 py-2 text-center bg-[#06351F]/40 border border-[#14482E] rounded-xl space-y-1.5">
+                  <p className="text-[11px] text-[#849E8E]">No projects yet</p>
+                  <button
+                    onClick={() => setCreateProjectOpen(true)}
+                    className="w-full py-1 px-2 rounded-lg bg-[#12452C] hover:bg-[#175235] text-[#20E34A] text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Create Project</span>
+                  </button>
+                </div>
+              ) : (
+                sidebarProjects.map((proj) => {
+                  const projHref = `/w/${slug}/projects/${proj.id}`;
+                  const isProjActive = pathname.startsWith(projHref);
+
+                  return (
+                    <Link
+                      key={proj.id}
+                      href={projHref}
+                      className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 group relative ${
+                        isProjActive
+                          ? 'bg-[#175235] text-white font-semibold'
+                          : 'text-[#D2DFD7] hover:bg-[#06351F] hover:text-white'
+                      }`}
                     >
                       <div className="flex items-center gap-2 truncate">
-                        {isExpanded ? (
-                          <ChevronDown className="w-3 h-3 text-[#849E8E] shrink-0" />
-                        ) : (
-                          <ChevronRight className="w-3 h-3 text-[#849E8E] shrink-0" />
-                        )}
-                        <Briefcase className="w-3.5 h-3.5 text-[#849E8E] group-hover:text-white" />
-                        <span className="truncate">{space.name}</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#20E34A] shrink-0" />
+                        <span className="truncate">{proj.name}</span>
                       </div>
-                      <span className="text-[10px] bg-[#12452C] text-[#849E8E] px-1.5 py-0.2 rounded-full">
-                        {space.projects?.length || 0}
+                      <span className="text-[10px] font-mono text-[#849E8E] px-1 py-0.2 rounded bg-[#06351F] shrink-0">
+                        {proj.key}
                       </span>
-                    </button>
-
-                    {/* Sub-projects list */}
-                    {isExpanded && space.projects && (
-                      <div className="pl-6 space-y-0.5">
-                        {space.projects.map((proj) => {
-                          const projHref = `/w/${slug}/projects/${proj.id}`;
-                          const isProjActive = pathname.startsWith(projHref);
-
-                          return (
-                            <Link
-                              key={proj.id}
-                              href={projHref}
-                              className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 group relative ${
-                                isProjActive
-                                  ? 'bg-[#175235] text-white font-semibold'
-                                  : 'text-[#D2DFD7] hover:bg-[#06351F] hover:text-white'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 truncate">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#20E34A] shrink-0" />
-                                <span className="truncate">{proj.name}</span>
-                              </div>
-                              <span className="text-[10px] font-mono text-[#849E8E] px-1 py-0.2 rounded bg-[#06351F] shrink-0">
-                                {proj.key}
-                              </span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                    </Link>
+                  );
+                })
+              )}
             </div>
           </div>
         )}
@@ -330,29 +406,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3 border-t border-[#14482E] shrink-0 bg-[#06351F]/60">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
-            <Avatar user={currentUser} size="sm" showStatus status="online" />
+            <Avatar user={user} size="sm" showStatus status="online" />
             {!collapsed && (
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-white truncate">
-                  {currentUser.name}
+                  {user.name}
                 </div>
                 <div className="text-[10px] text-[#849E8E] truncate">
-                  {currentUser.role}
+                  {user.role}
                 </div>
               </div>
             )}
           </div>
           {!collapsed && (
-            <Link
-              href={`/w/${slug}/settings/general`}
-              className="p-1.5 rounded-lg text-[#849E8E] hover:text-white hover:bg-[#12452C] transition-colors"
-              title="Workspace Settings"
-            >
-              <Settings className="w-4 h-4" />
-            </Link>
+            <div className="flex items-center gap-1">
+              <Link
+                href={`/w/${slug}/settings/members`}
+                className="p-1.5 rounded-lg text-[#849E8E] hover:text-white hover:bg-[#12452C] transition-colors"
+                title="Workspace Settings"
+              >
+                <Settings className="w-4 h-4" />
+              </Link>
+              <button
+                onClick={signOut}
+                className="p-1.5 rounded-lg text-[#849E8E] hover:text-rose-400 hover:bg-[#12452C] transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
       </div>
+      {/* Create Project Modal */}
+      <CreateProjectModal
+        isOpen={createProjectOpen}
+        onClose={() => setCreateProjectOpen(false)}
+      />
     </aside>
   );
 };

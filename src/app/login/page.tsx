@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -16,6 +16,35 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // If already logged in, seamlessly redirect
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          const { data: memberships } = await supabase
+            .from('workspace_members')
+            .select('workspaces(slug)')
+            .eq('user_id', user.id)
+            .limit(1);
+
+          if (memberships && memberships.length > 0 && (memberships[0] as any).workspaces?.slug) {
+            router.push(`/w/${(memberships[0] as any).workspaces.slug}`);
+          } else {
+            router.push('/onboarding');
+          }
+        }
+      } catch {
+        // Continue with normal login view
+      }
+    }
+    checkSession();
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,10 +124,11 @@ export default function LoginPage() {
                 type="email"
                 required
                 icon={<Mail className="w-4 h-4" />}
-                placeholder="alex@company.com"
+                placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
+                autoFocus
               />
             </div>
 
@@ -149,7 +179,7 @@ export default function LoginPage() {
                 href="/signup"
                 className="font-bold text-[#064E24] hover:underline"
               >
-                Create Workspace
+                Create Account
               </Link>
             </p>
           </div>
@@ -158,4 +188,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
