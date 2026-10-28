@@ -177,11 +177,14 @@ export type NotificationType =
   | 'review_requested'
   | 'review_decided'
   | 'comment'
-  | 'system';
+  | 'system'
+  | 'invitation';
 
 export interface AppNotification {
   id: string;
   workspaceId: string;
+  workspaceName?: string;
+  workspaceSlug?: string;
   recipientId: string;
   actor?: UserProfile;
   type: NotificationType;

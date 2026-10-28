@@ -250,3 +250,123 @@ CREATE POLICY "task_assignees_delete_policy" ON public.task_assignees
       WHERE t.id = task_id AND public.can_view_project(t.project_id, auth.uid())
     )
   );
+
+
+-- 11. Workspace Invitations RLS Repair
+DROP POLICY IF EXISTS "workspace_invitations_select_policy" ON public.workspace_invitations;
+CREATE POLICY "workspace_invitations_select_policy" ON public.workspace_invitations
+  FOR SELECT TO authenticated
+  USING (
+    public.is_workspace_member(workspace_id, auth.uid())
+    OR LOWER(email) = LOWER((SELECT email FROM public.profiles WHERE id = auth.uid()))
+  );
+
+DROP POLICY IF EXISTS "workspace_invitations_insert_policy" ON public.workspace_invitations;
+CREATE POLICY "workspace_invitations_insert_policy" ON public.workspace_invitations
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.get_workspace_role(workspace_id, auth.uid()) IN ('owner', 'admin')
+    OR EXISTS (SELECT 1 FROM public.workspaces WHERE id = workspace_id AND owner_id = auth.uid())
+  );
+
+-- 12. Atomic Invitation Dispatch RPC with Instant In-App Inbox Notification
+CREATE OR REPLACE FUNCTION public.send_workspace_invitation(
+  target_workspace_id UUID,
+  invitee_email TEXT,
+  invitee_role public.workspace_role DEFAULT 'member'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_inviter_id UUID := auth.uid();
+  v_inviter_name TEXT;
+  v_ws_name TEXT;
+  v_ws_slug TEXT;
+  v_invite_token TEXT;
+  v_target_user_id UUID;
+  v_invite_id UUID;
+BEGIN
+  -- 1. Authorization check: caller must be owner or admin of target workspace
+  IF NOT (
+    public.get_workspace_role(target_workspace_id, v_inviter_id) IN ('owner', 'admin')
+    OR EXISTS (SELECT 1 FROM public.workspaces WHERE id = target_workspace_id AND owner_id = v_inviter_id)
+  ) THEN
+    RAISE EXCEPTION 'Unauthorized: only workspace owners and admins can send invitations';
+  END IF;
+
+  -- 2. Fetch inviter info & workspace details
+  SELECT COALESCE(full_name, email) INTO v_inviter_name FROM public.profiles WHERE id = v_inviter_id;
+  SELECT name, slug INTO v_ws_name, v_ws_slug FROM public.workspaces WHERE id = target_workspace_id;
+
+  -- 3. Generate unique invitation token
+  v_invite_token := encode(gen_random_bytes(24), 'hex');
+
+  -- 4. Insert or update workspace_invitations
+  INSERT INTO public.workspace_invitations (
+    workspace_id,
+    email,
+    role,
+    token,
+    invited_by,
+    status,
+    expires_at
+  ) VALUES (
+    target_workspace_id,
+    LOWER(TRIM(invitee_email)),
+    invitee_role,
+    v_invite_token,
+    v_inviter_id,
+    'pending',
+    NOW() + INTERVAL '7 days'
+  )
+  RETURNING id INTO v_invite_id;
+
+  -- 5. Look up if invitee already has an account in profiles
+  SELECT id INTO v_target_user_id
+  FROM public.profiles
+  WHERE LOWER(email) = LOWER(TRIM(invitee_email))
+  LIMIT 1;
+
+  -- 6. If target user has an account, dispatch instant In-App Notification with join link & greeting
+  IF v_target_user_id IS NOT NULL THEN
+    INSERT INTO public.notifications (
+      workspace_id,
+      recipient_id,
+      actor_id,
+      type,
+      title,
+      body,
+      link_url
+    ) VALUES (
+      target_workspace_id,
+      v_target_user_id,
+      v_inviter_id,
+      'system',
+      'Team Invitation: ' || v_ws_name,
+      COALESCE(v_inviter_name, 'A team lead') || ' invited you to join ' || v_ws_name || ' as ' || initcap(invitee_role::text) || '. Click below to accept the invitation and start collaborating!',
+      '/invite/' || v_invite_token
+    );
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'invitation_id', v_invite_id,
+    'token', v_invite_token,
+    'invite_url', '/invite/' || v_invite_token,
+    'notified_user', (v_target_user_id IS NOT NULL),
+    'workspace_name', v_ws_name
+  );
+END;
+$$;
+
+-- 13. Notifications RLS Policy Repair (Allows workspace owners/members to dispatch notifications)
+DROP POLICY IF EXISTS "notifications_insert_policy" ON public.notifications;
+CREATE POLICY "notifications_insert_policy" ON public.notifications
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.is_workspace_member(workspace_id, auth.uid())
+    OR EXISTS (SELECT 1 FROM public.workspaces WHERE id = workspace_id AND owner_id = auth.uid())
+  );

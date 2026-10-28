@@ -412,10 +412,10 @@ export async function addTaskComment(input: {
 }
 
 // ------------------------------------------------------------------------------
-// Notifications
+// Notifications & Team Invitations
 // ------------------------------------------------------------------------------
 
-export async function getNotifications(workspaceId: string): Promise<AppNotification[]> {
+export async function getNotifications(workspaceId?: string): Promise<AppNotification[]> {
   const supabase = createClient();
   const {
     data: { user },
@@ -423,33 +423,44 @@ export async function getNotifications(workspaceId: string): Promise<AppNotifica
 
   if (!user) return [];
 
+  // Fetch notifications addressed to this user (both for the active workspace AND invitations from other workspaces)
   const { data, error } = await supabase
     .from('notifications')
     .select(`
       *,
-      actor:profiles!actor_id(id, full_name, email, avatar_url)
+      actor:profiles!actor_id(id, full_name, email, avatar_url),
+      workspace:workspaces!workspace_id(id, name, slug)
     `)
-    .eq('workspace_id', workspaceId)
     .eq('recipient_id', user.id)
     .order('created_at', { ascending: false })
-    .limit(20);
+    .limit(30);
 
-  if (error || !data || data.length === 0) {
+  if (error || !data) {
+    console.warn('Error fetching notifications:', error?.message);
     return sampleNotifications;
   }
 
-  return data.map((n: any) => ({
-    id: n.id,
-    workspaceId: n.workspace_id,
-    recipientId: n.recipient_id,
-    actor: n.actor ? parseProfile(n.actor) : undefined,
-    type: n.type,
-    title: n.title,
-    body: n.body,
-    linkUrl: n.link_url || undefined,
-    isRead: Boolean(n.is_read),
-    createdAt: n.created_at,
-  }));
+  if (data.length === 0) {
+    return [];
+  }
+
+  return data.map((n: any) => {
+    const ws = n.workspace;
+    return {
+      id: n.id,
+      workspaceId: n.workspace_id,
+      workspaceName: ws?.name,
+      workspaceSlug: ws?.slug,
+      recipientId: n.recipient_id,
+      actor: n.actor ? parseProfile(n.actor) : undefined,
+      type: n.type,
+      title: n.title,
+      body: n.body,
+      linkUrl: n.link_url || undefined,
+      isRead: Boolean(n.is_read),
+      createdAt: n.created_at,
+    };
+  });
 }
 
 export async function markNotificationAsRead(notificationId: string): Promise<void> {
@@ -460,7 +471,7 @@ export async function markNotificationAsRead(notificationId: string): Promise<vo
     .eq('id', notificationId);
 }
 
-export async function markAllNotificationsAsRead(workspaceId: string): Promise<void> {
+export async function markAllNotificationsAsRead(workspaceId?: string): Promise<void> {
   const supabase = createClient();
   const {
     data: { user },
@@ -468,9 +479,154 @@ export async function markAllNotificationsAsRead(workspaceId: string): Promise<v
 
   if (!user) return;
 
-  await supabase
+  let query = supabase
     .from('notifications')
     .update({ is_read: true })
-    .eq('workspace_id', workspaceId)
     .eq('recipient_id', user.id);
+
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId);
+  }
+
+  await query;
+}
+
+export async function sendWorkspaceInvitation(
+  workspaceId: string,
+  email: string,
+  role: 'admin' | 'member' | 'guest' = 'member'
+): Promise<{
+  success: boolean;
+  token?: string;
+  inviteUrl?: string;
+  notifiedUser?: boolean;
+  workspaceName?: string;
+}> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error('Authentication required.');
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  // 1. Try atomic RPC send_workspace_invitation
+  const { data: rpcData, error: rpcError } = await supabase.rpc('send_workspace_invitation', {
+    target_workspace_id: workspaceId,
+    invitee_email: cleanEmail,
+    invitee_role: role,
+  });
+
+  if (!rpcError && rpcData) {
+    return rpcData;
+  }
+
+  // 2. Fallback if RPC not yet run in SQL Editor
+  console.warn('RPC send_workspace_invitation fallback:', rpcError?.message);
+  const token = Math.random().toString(16).substring(2, 10) + Math.random().toString(16).substring(2, 10);
+
+  const { error: invErr } = await supabase.from('workspace_invitations').insert({
+    workspace_id: workspaceId,
+    email: cleanEmail,
+    role,
+    token,
+    invited_by: user.id,
+    status: 'pending',
+  });
+
+  if (invErr) throw invErr;
+
+  let notifiedUser = false;
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .eq('email', cleanEmail)
+    .maybeSingle();
+
+  if (profile) {
+    const { data: ws } = await supabase
+      .from('workspaces')
+      .select('name')
+      .eq('id', workspaceId)
+      .maybeSingle();
+    const wsName = ws?.name || 'Workspace';
+
+    const { data: myProfile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle();
+    const inviterName = myProfile?.full_name || user.email?.split('@')[0] || 'Team Lead';
+
+    await supabase.from('notifications').insert({
+      workspace_id: workspaceId,
+      recipient_id: profile.id,
+      actor_id: user.id,
+      type: 'system',
+      title: `Team Invitation: ${wsName}`,
+      body: `${inviterName} has invited you to join ${wsName} as a ${role}! Click below to accept the invitation and start collaborating.`,
+      link_url: `/invite/${token}`,
+    });
+    notifiedUser = true;
+  }
+
+  return {
+    success: true,
+    token,
+    inviteUrl: `/invite/${token}`,
+    notifiedUser,
+  };
+}
+
+export async function getWorkspaceInvitations(workspaceId: string): Promise<any[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('workspace_invitations')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.warn('Failed to load invitations:', error.message);
+    return [];
+  }
+  return data || [];
+}
+
+export async function revokeWorkspaceInvitation(invitationId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('workspace_invitations')
+    .update({ status: 'revoked' })
+    .eq('id', invitationId);
+
+  if (error) throw error;
+}
+
+export async function acceptInvitationByToken(token: string): Promise<any> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('accept_workspace_invitation', {
+    invitation_token: token,
+  });
+
+  if (error) throw error;
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('recipient_id', user.id)
+        .ilike('link_url', `%${token}%`);
+    }
+  } catch (e) {
+    // Non-critical
+  }
+
+  return data;
 }
