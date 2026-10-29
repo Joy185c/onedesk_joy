@@ -278,7 +278,7 @@ CREATE OR REPLACE FUNCTION public.send_workspace_invitation(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, auth
 AS $$
 DECLARE
   v_inviter_id UUID := auth.uid();
@@ -301,8 +301,8 @@ BEGIN
   SELECT COALESCE(full_name, email) INTO v_inviter_name FROM public.profiles WHERE id = v_inviter_id;
   SELECT name, slug INTO v_ws_name, v_ws_slug FROM public.workspaces WHERE id = target_workspace_id;
 
-  -- 3. Generate unique invitation token
-  v_invite_token := encode(gen_random_bytes(24), 'hex');
+  -- 3. Generate unique invitation token (uses native gen_random_uuid)
+  v_invite_token := 'tok_' || replace(gen_random_uuid()::text, '-', '');
 
   -- 4. Insert or update workspace_invitations
   INSERT INTO public.workspace_invitations (
@@ -324,11 +324,27 @@ BEGIN
   )
   RETURNING id INTO v_invite_id;
 
-  -- 5. Look up if invitee already has an account in profiles
+  -- 5. Look up if invitee already has an account in profiles or auth.users
   SELECT id INTO v_target_user_id
   FROM public.profiles
   WHERE LOWER(email) = LOWER(TRIM(invitee_email))
   LIMIT 1;
+
+  IF v_target_user_id IS NULL THEN
+    SELECT id INTO v_target_user_id
+    FROM auth.users
+    WHERE LOWER(email) = LOWER(TRIM(invitee_email))
+    LIMIT 1;
+
+    -- Backfill public.profiles if missing
+    IF v_target_user_id IS NOT NULL THEN
+      INSERT INTO public.profiles (id, email, full_name)
+      SELECT u.id, u.email, COALESCE(u.raw_user_meta_data->>'full_name', split_part(u.email, '@', 1))
+      FROM auth.users u
+      WHERE u.id = v_target_user_id
+      ON CONFLICT (id) DO NOTHING;
+    END IF;
+  END IF;
 
   -- 6. If target user has an account, dispatch instant In-App Notification with join link & greeting
   IF v_target_user_id IS NOT NULL THEN
@@ -362,11 +378,39 @@ BEGIN
 END;
 $$;
 
--- 13. Notifications RLS Policy Repair (Allows workspace owners/members to dispatch notifications)
+-- 13. Notifications RLS Policy Repair
 DROP POLICY IF EXISTS "notifications_insert_policy" ON public.notifications;
 CREATE POLICY "notifications_insert_policy" ON public.notifications
   FOR INSERT TO authenticated
   WITH CHECK (
     public.is_workspace_member(workspace_id, auth.uid())
     OR EXISTS (SELECT 1 FROM public.workspaces WHERE id = workspace_id AND owner_id = auth.uid())
+  );
+
+-- 14. Retroactively deliver in-app notifications for existing pending invitations (e.g. joy224564@gmail.com)
+INSERT INTO public.notifications (
+  workspace_id,
+  recipient_id,
+  actor_id,
+  type,
+  title,
+  body,
+  link_url
+)
+SELECT 
+  inv.workspace_id,
+  u.id,
+  inv.invited_by,
+  'system'::public.notification_type,
+  'Team Invitation: ' || w.name,
+  COALESCE(p.full_name, 'A team lead') || ' invited you to join ' || w.name || ' as ' || initcap(inv.role::text) || '. Click below to accept the invitation and start collaborating!',
+  '/invite/' || inv.token
+FROM public.workspace_invitations inv
+JOIN public.workspaces w ON w.id = inv.workspace_id
+LEFT JOIN public.profiles p ON p.id = inv.invited_by
+JOIN auth.users u ON LOWER(u.email) = LOWER(inv.email)
+WHERE inv.status = 'pending'
+  AND NOT EXISTS (
+    SELECT 1 FROM public.notifications n 
+    WHERE n.recipient_id = u.id AND n.link_url LIKE '%' || inv.token
   );

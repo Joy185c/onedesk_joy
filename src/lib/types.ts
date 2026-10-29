@@ -282,5 +282,98 @@ export interface CalendarEvent {
   status?: string;
 }
 
+// ------------------------------------------------------------------------------
+// Phase 6: Automation & AI Types
+// ------------------------------------------------------------------------------
+
+export type AutomationTriggerType =
+  | 'task_created'
+  | 'task_status_changed'
+  | 'review_requested'
+  | 'review_approved'
+  | 'task_completed';
+
+export type AutomationActionType =
+  | 'send_notification'
+  | 'assign_user'
+  | 'change_status'
+  | 'create_subtask'
+  | 'post_channel_message';
+
+export interface AutomationCondition {
+  field: string;
+  operator: 'equals' | 'not_equals' | 'contains';
+  value: string;
+}
+
+export interface AutomationRule {
+  id: string;
+  workspaceId: string;
+  projectId?: string;
+  projectName?: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  triggerType: AutomationTriggerType;
+  triggerConfig: Record<string, any>;
+  conditions: AutomationCondition[];
+  actionType: AutomationActionType;
+  actionConfig: Record<string, any>;
+  executionCount: number;
+  lastTriggeredAt?: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationRun {
+  id: string;
+  ruleId: string;
+  ruleName?: string;
+  workspaceId: string;
+  triggerEvent: string;
+  triggerPayload: Record<string, any>;
+  status: 'success' | 'failed' | 'skipped' | 'retrying';
+  actionResult?: Record<string, any>;
+  errorMessage?: string;
+  executionDurationMs: number;
+  createdAt: string;
+}
+
+export interface AuditLog {
+  id: string;
+  workspaceId: string;
+  actor?: UserProfile;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  details: Record<string, any>;
+  createdAt: string;
+}
+
+export interface AIProposedTask {
+  id?: string;
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  storyPoints?: number;
+  estimatedHours?: number;
+  subtasks?: string[];
+  suggestedAssigneeRole?: string;
+}
+
+export interface AIProposalPlan {
+  id: string;
+  title: string;
+  summary: string;
+  targetProjectId: string;
+  projectName?: string;
+  tasks: AIProposedTask[];
+  risks?: string[];
+  recommendations?: string[];
+  createdAt: string;
+}
+
+
 
 

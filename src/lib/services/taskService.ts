@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { Task, TaskStatus, TaskPriority, UserProfile } from '@/lib/types';
 import { sampleUsers } from '@/lib/mockData';
+import { triggerAutomations } from '@/lib/services/automationService';
 
 export interface CreateTaskInput {
   workspaceId: string;
@@ -122,6 +123,18 @@ export async function createTask(input: CreateTaskInput): Promise<any> {
     await supabase.from('task_assignees').insert(assigneeRows);
   }
 
+  // 3. Trigger Phase 6 automations asynchronously
+  try {
+    await triggerAutomations(input.workspaceId, 'task_created', {
+      taskId: task.id,
+      projectId: input.projectId,
+      title: input.title,
+      priority: input.priority || 'medium',
+    });
+  } catch (autoErr) {
+    console.warn('Automation trigger failed:', autoErr);
+  }
+
   return task;
 }
 
@@ -135,10 +148,32 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', taskId)
-    .select()
+    .select('*, project:projects(workspace_id)')
     .single();
 
   if (error) throw error;
+
+  // Trigger Phase 6 automations
+  try {
+    const wsId = data.workspace_id || (data.project as any)?.workspace_id;
+    if (wsId) {
+      await triggerAutomations(wsId, 'task_status_changed', {
+        taskId,
+        status,
+        title: data.title,
+      });
+
+      if (status === 'completed') {
+        await triggerAutomations(wsId, 'task_completed', {
+          taskId,
+          title: data.title,
+        });
+      }
+    }
+  } catch (autoErr) {
+    console.warn('Automation trigger failed:', autoErr);
+  }
+
   return data;
 }
 
@@ -216,10 +251,26 @@ export async function submitTaskForReview(taskId: string, submissionNote?: strin
   if (error) throw error;
 
   // 2. Transition task to ready_for_review
-  await supabase
+  const { data: updatedTask } = await supabase
     .from('tasks')
     .update({ status: 'ready_for_review', updated_at: new Date().toISOString() })
-    .eq('id', taskId);
+    .eq('id', taskId)
+    .select('title, workspace_id, project:projects(workspace_id)')
+    .single();
+
+  // Trigger Phase 6 automations
+  try {
+    const wsId = updatedTask?.workspace_id || (updatedTask?.project as any)?.workspace_id;
+    if (wsId) {
+      await triggerAutomations(wsId, 'review_requested', {
+        taskId,
+        taskTitle: updatedTask?.title,
+        submissionNote,
+      });
+    }
+  } catch (autoErr) {
+    console.warn('Automation trigger failed:', autoErr);
+  }
 
   return req;
 }
@@ -254,10 +305,29 @@ export async function decideReview(
 
   // 2. If approved -> status: completed; If changes_requested -> status: in_progress
   const nextStatus: TaskStatus = decision === 'approved' ? 'completed' : 'in_progress';
-  await supabase
+  const { data: updatedTask } = await supabase
     .from('tasks')
     .update({ status: nextStatus, updated_at: new Date().toISOString() })
-    .eq('id', taskId);
+    .eq('id', taskId)
+    .select('title, workspace_id, project:projects(workspace_id)')
+    .single();
+
+  // Trigger Phase 6 automations
+  try {
+    const wsId = updatedTask?.workspace_id || (updatedTask?.project as any)?.workspace_id;
+    if (wsId && decision === 'approved') {
+      await triggerAutomations(wsId, 'review_approved', {
+        taskId,
+        taskTitle: updatedTask?.title,
+      });
+      await triggerAutomations(wsId, 'task_completed', {
+        taskId,
+        taskTitle: updatedTask?.title,
+      });
+    }
+  } catch (autoErr) {
+    console.warn('Automation trigger failed:', autoErr);
+  }
 
   return req;
 }
@@ -357,11 +427,37 @@ export async function assignUserToTask(taskId: string, userId: string): Promise<
   const { error } = await supabase.from('task_assignees').insert({
     task_id: taskId,
     user_id: userId,
-    assigned_by: user?.id || null,
   });
 
   if (error && error.code !== '23505') {
     throw error;
+  }
+
+  // Create an in-app notification for the assigned teammate
+  try {
+    if (user && userId !== user.id) {
+      const { data: taskData } = await supabase
+        .from('tasks')
+        .select('title, workspace_id, project_id, project:projects(workspace_id, name)')
+        .eq('id', taskId)
+        .maybeSingle();
+
+      const wsId = taskData?.workspace_id || (taskData?.project as any)?.workspace_id;
+
+      if (taskData && wsId) {
+        await supabase.from('notifications').insert({
+          workspace_id: wsId,
+          recipient_id: userId,
+          actor_id: user.id,
+          type: 'assigned',
+          title: 'Assigned to Deliverable',
+          body: `You were assigned to deliverable "${taskData.title}".`,
+          link_url: null,
+        });
+      }
+    }
+  } catch (notifErr) {
+    console.warn('Failed to dispatch assignment notification:', notifErr);
   }
 }
 

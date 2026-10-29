@@ -21,7 +21,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { sampleTasks } from '@/lib/mockData';
 
 export default function MyTasksPage() {
-  const { workspace, user, isDemoMode } = useWorkspace();
+  const { workspace, user, isAdminOrOwner, isDemoMode } = useWorkspace();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filterTab, setFilterTab] = useState<'all' | 'today' | 'overdue' | 'review' | 'completed'>('all');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -37,13 +37,19 @@ export default function MyTasksPage() {
         const taskPromises = projs.map((p) => getProjectTasks(p.id));
         const allProjectTasks = (await Promise.all(taskPromises)).flat();
 
-        // Filter tasks assigned to current user, or all tasks if workspace owner
-        const userTasks = allProjectTasks.filter(
-          (t) =>
-            t.assignees.some((a) => a.id === user.id) ||
-            allProjectTasks.length <= 5 // fallback to visible deliverables
+        // Assignment-based visibility: Filter deliverables assigned to current user
+        const userAssigned = allProjectTasks.filter((t) =>
+          t.assignees.some((a) => a.id === user.id)
         );
-        setTasks(userTasks.length > 0 ? userTasks : allProjectTasks);
+
+        if (userAssigned.length > 0) {
+          setTasks(userAssigned);
+        } else if (isAdminOrOwner) {
+          // Workspace Owners/Admins see active deliverables across projects
+          setTasks(allProjectTasks);
+        } else {
+          setTasks([]);
+        }
       }
     } catch (err) {
       console.error(err);
