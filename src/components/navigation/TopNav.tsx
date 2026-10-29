@@ -14,6 +14,7 @@ import {
   LogOut,
   Settings,
   Shield,
+  User,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -197,6 +198,15 @@ export const TopNav: React.FC<TopNavProps> = ({
               </div>
 
               <div className="py-1">
+                <Link
+                  href={`/w/${workspace.slug}/settings`}
+                  onClick={() => setProfileOpen(false)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[#5E6962] hover:text-[#18251D] hover:bg-[#F0F1F3] rounded-xl transition-colors"
+                >
+                  <User className="w-4 h-4 text-[#778079]" />
+                  <span>Profile & Avatar</span>
+                </Link>
+
                 <Link
                   href={`/w/${workspace.slug}/settings/members`}
                   onClick={() => setProfileOpen(false)}

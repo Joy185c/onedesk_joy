@@ -405,7 +405,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Bottom Profile & Settings Bar */}
       <div className="p-3 border-t border-[#14482E] shrink-0 bg-[#06351F]/60">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5 min-w-0">
+          <Link
+            href={`/w/${slug}/settings`}
+            className="flex items-center gap-2.5 min-w-0 hover:opacity-90 transition-opacity cursor-pointer"
+            title="Profile & Avatar Settings"
+          >
             <Avatar user={user} size="sm" showStatus status="online" />
             {!collapsed && (
               <div className="min-w-0">
@@ -417,13 +421,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               </div>
             )}
-          </div>
+          </Link>
           {!collapsed && (
             <div className="flex items-center gap-1">
               <Link
-                href={`/w/${slug}/settings/members`}
+                href={`/w/${slug}/settings`}
                 className="p-1.5 rounded-lg text-[#849E8E] hover:text-white hover:bg-[#12452C] transition-colors"
-                title="Workspace Settings"
+                title="Profile & Settings"
               >
                 <Settings className="w-4 h-4" />
               </Link>

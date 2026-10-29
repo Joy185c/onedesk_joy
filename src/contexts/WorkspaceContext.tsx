@@ -17,6 +17,7 @@ export interface WorkspaceContextType {
   isDemoMode: boolean;
   signOut: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
+  updateUserLocally: (updates: Partial<UserProfile>) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
@@ -206,6 +207,21 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const updateUserLocally = (updates: Partial<UserProfile>) => {
+    setUser((prev) => ({
+      ...prev,
+      ...updates,
+      initials: updates.name
+        ? updates.name
+            .split(' ')
+            .map((n) => n[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase()
+        : prev.initials,
+    }));
+  };
+
   const isOwner = role === 'owner';
   const isAdminOrOwner = role === 'owner' || role === 'admin';
 
@@ -222,6 +238,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isDemoMode,
         signOut,
         refreshWorkspace: fetchWorkspaceData,
+        updateUserLocally,
       }}
     >
       {children}

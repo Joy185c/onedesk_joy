@@ -29,6 +29,7 @@ import {
   getAIWorkspaceContext,
   generateAIProposal,
   applyAIProposal,
+  getAIProviderStatus,
 } from '@/lib/services/aiService';
 
 interface ChatMessage {
@@ -47,6 +48,12 @@ export default function AIAssistantPage() {
   const [appliedProposalIds, setAppliedProposalIds] = useState<string[]>([]);
   const [selectedTasksMap, setSelectedTasksMap] = useState<Record<string, number[]>>({});
   const [expandedTasksMap, setExpandedTasksMap] = useState<Record<string, boolean>>({});
+  const [providerStatus, setProviderStatus] = useState<{
+    provider: string;
+    model: string;
+    isLive: boolean;
+    statusText: string;
+  } | null>(null);
   const [contextStats, setContextStats] = useState<{
     workspaceName: string;
     projectCount: number;
@@ -59,6 +66,7 @@ export default function AIAssistantPage() {
 
   useEffect(() => {
     if (workspace.id) {
+      getAIProviderStatus().then(setProviderStatus);
       getAIWorkspaceContext(workspace.id).then((ctx) => {
         setContextStats(ctx);
         // Welcome message
@@ -203,6 +211,15 @@ export default function AIAssistantPage() {
               <Badge variant="default" className="text-[10px] bg-[#F7F8F8] border-[#CBD3CE] text-[#064E24] font-bold">
                 Permission-Aware
               </Badge>
+              {providerStatus && (
+                <Badge
+                  variant={providerStatus.isLive ? 'lime' : 'default'}
+                  className="text-[10px]"
+                  title={providerStatus.statusText}
+                >
+                  {providerStatus.isLive ? `Live: ${providerStatus.model}` : 'Semantic Planner'}
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-[#778079]">
               Strictly scoped to <strong>{workspace.name}</strong> • Schema-validated preview before commit

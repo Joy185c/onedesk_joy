@@ -43,6 +43,29 @@ export async function getAIWorkspaceContext(workspaceId: string): Promise<{
   };
 }
 
+export async function getAIProviderStatus(): Promise<{
+  provider: 'gemini' | 'groq' | 'heuristic';
+  model: string;
+  isLive: boolean;
+  statusText: string;
+}> {
+  try {
+    const res = await fetch('/api/ai/status');
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Failed to probe AI status endpoint:', err);
+  }
+
+  return {
+    provider: 'heuristic',
+    model: 'deterministic-planner-v2',
+    isLive: false,
+    statusText: 'Semantic Heuristic Engine (Add GEMINI_API_KEY to .env.local for live LLM)',
+  };
+}
+
 // Blueprint T14: AI task creation proposal: Schema-validated proposal with NO write before confirmation
 export async function generateAIProposal(
   workspaceId: string,
@@ -55,128 +78,85 @@ export async function generateAIProposal(
 
   const pKey = targetProject?.key || 'PRJ';
   const pName = targetProject?.name || 'Primary Delivery';
-  const promptLower = userPrompt.toLowerCase();
 
-  let proposedTasks: AIProposedTask[] = [];
-  let summary = '';
-  let risks: string[] = [];
-  let recommendations: string[] = [];
+  try {
+    // Call server-side LLM endpoint (Gemini / Groq / Schema Validator)
+    const apiRes = await fetch('/api/ai/proposal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userPrompt,
+        workspaceName: context.workspaceName,
+        projectName: pName,
+        projectKey: pKey,
+        overdueCount: context.overdueCount,
+        taskCount: context.taskCount,
+      }),
+    });
 
-  if (promptLower.includes('qa') || promptLower.includes('test') || promptLower.includes('regression')) {
-    summary = `Generated comprehensive QA verification and testing breakdown for ${pName}.`;
-    proposedTasks = [
-      {
-        title: 'End-to-End Regression Test Suite',
-        description: 'Execute automated regression testing across all critical tenant workflows and permission gates.',
-        priority: 'high',
-        storyPoints: 5,
-        estimatedHours: 8,
-        subtasks: [
-          'Run Playwright tenant isolation scenarios',
-          'Verify RLS boundary enforcement on private projects',
-          'Audit token revocation on membership termination',
-        ],
-      },
-      {
-        title: 'Cross-Browser Visual & UI Inspection',
-        description: 'Verify Obsidian Forest & Electric Lime contrast, dark theme tokens, and mobile responsiveness.',
-        priority: 'medium',
-        storyPoints: 3,
-        estimatedHours: 4,
-        subtasks: [
-          'Verify drawer modals at 375px mobile viewport',
-          'Test tablet navigation rail collapse state',
-          'Audit keyboard navigation and focus indicators',
-        ],
-      },
-      {
-        title: 'Load and Realtime Latency Benchmark',
-        description: 'Measure message delivery and notification latency under concurrent WebSocket connections.',
-        priority: 'low',
-        storyPoints: 2,
-        estimatedHours: 3,
-        subtasks: ['Profile Supabase channel broadcast rate', 'Verify client-side message deduplication'],
-      },
-    ];
-    risks = ['Ensure staging Supabase instance matches production RLS policies before running destructive test scripts.'];
-    recommendations = ['Require a Review Gate sign-off before closing the regression suite.'];
-  } else if (promptLower.includes('risk') || promptLower.includes('deadline') || promptLower.includes('audit')) {
-    summary = `Analyzed delivery roadmap for ${context.workspaceName}. Detected ${context.overdueCount} deliverable bottleneck(s).`;
-    proposedTasks = [
-      {
-        title: 'Mitigate Overdue Delivery Roadblocks',
-        description: `Resolve dependencies on ${context.overdueCount} flagged tasks across active sprints.`,
-        priority: 'urgent',
-        storyPoints: 5,
-        estimatedHours: 6,
-        subtasks: [
-          'Reassign unblocked subtasks to active contributors',
-          'Adjust sprint milestone due dates with client stakeholder',
-        ],
-      },
-      {
-        title: 'Workload Rebalancing & Capacity Review',
-        description: 'Redistribute high-velocity tasks to prevent team burnout across parallel projects.',
-        priority: 'high',
-        storyPoints: 3,
-        estimatedHours: 4,
-        subtasks: ['Inspect member timesheets in Time Tracking', 'Balance story point distribution in Sprint Backlog'],
-      },
-    ];
-    risks = [
-      `${context.overdueCount > 0 ? `${context.overdueCount} task(s) currently past deadline.` : 'Tight schedule on sprint milestone deliverables.'}`,
-    ];
-    recommendations = ['Enable "Review Gatekeeper" automation rule to catch unreviewed PRs earlier.'];
-  } else {
-    // Default sprint breakdown proposal
-    summary = `Decomposed natural language brief "${userPrompt.slice(0, 50)}..." into actionable sprint deliverables for ${pName}.`;
-    proposedTasks = [
-      {
-        title: `${userPrompt.length > 30 ? userPrompt.slice(0, 30) + '...' : userPrompt} - Architectural Blueprint`,
-        description: `Establish interface contracts, database constraints, and state machine transitions for "${userPrompt}".`,
-        priority: 'high',
-        storyPoints: 5,
-        estimatedHours: 8,
-        subtasks: [
-          'Draft schema migration with foreign keys and RLS',
-          'Document API contracts and permission matrices',
-          'Align UI design tokens with Obsidian Forest specifications',
-        ],
-      },
-      {
-        title: `${userPrompt.length > 30 ? userPrompt.slice(0, 30) + '...' : userPrompt} - Core Implementation`,
-        description: `Implement full-stack service handlers and reactive UI components.`,
-        priority: 'urgent',
-        storyPoints: 8,
-        estimatedHours: 14,
-        subtasks: [
-          'Connect Supabase persistence with optimistic client state',
-          'Add form validation with Zod schemas',
-          'Implement real-time notification dispatch',
-        ],
-      },
-      {
-        title: `${userPrompt.length > 30 ? userPrompt.slice(0, 30) + '...' : userPrompt} - QA Review Gate & Sign-off`,
-        description: `Execute comprehensive review protocol and collect reviewer approval.`,
-        priority: 'medium',
-        storyPoints: 3,
-        estimatedHours: 4,
-        subtasks: ['Submit task for formal manager review', 'Verify audit log persistence'],
-      },
-    ];
-    risks = ['Ensure assignee has authorized membership in target project before task distribution.'];
-    recommendations = ['Use Automations Studio to trigger milestone celebrations on completion.'];
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.proposal) {
+        const prop = data.proposal;
+        return {
+          id: `proposal-${Date.now()}`,
+          title: prop.title || `AI Delivery Plan: ${pName}`,
+          summary: prop.summary || `Decomposed scope for ${pName}.`,
+          targetProjectId: targetProject?.id || '',
+          projectName: pName,
+          tasks: (prop.tasks || []).map((t: any) => ({
+            title: t.title,
+            description: t.description || '',
+            priority: (t.priority || 'medium') as TaskPriority,
+            storyPoints: t.storyPoints ? Number(t.storyPoints) : undefined,
+            estimatedHours: t.estimatedHours ? Number(t.estimatedHours) : undefined,
+            subtasks: t.subtasks || [],
+          })),
+          risks: prop.risks || [],
+          recommendations: prop.recommendations || [],
+          createdAt: new Date().toISOString(),
+        };
+      }
+    }
+  } catch (apiErr) {
+    console.warn('AI proposal API fetch failed, utilizing client fallback:', apiErr);
   }
 
+  // Fallback if network or offline
   return {
     id: `proposal-${Date.now()}`,
     title: `AI Delivery Plan: ${pName}`,
-    summary,
+    summary: `Structured sprint scope for "${userPrompt.slice(0, 40)}..."`,
     targetProjectId: targetProject?.id || '',
     projectName: pName,
-    tasks: proposedTasks,
-    risks,
-    recommendations,
+    tasks: [
+      {
+        title: `${userPrompt.slice(0, 30)} - Architecture & Schema`,
+        description: 'Establish interface contracts, database constraints, and state transitions.',
+        priority: 'high',
+        storyPoints: 5,
+        estimatedHours: 8,
+        subtasks: ['Define schema migrations', 'Document API contracts'],
+      },
+      {
+        title: `${userPrompt.slice(0, 30)} - Core Feature Delivery`,
+        description: 'Implement full-stack service handlers and reactive UI components.',
+        priority: 'urgent',
+        storyPoints: 8,
+        estimatedHours: 14,
+        subtasks: ['Connect Supabase persistence', 'Implement real-time sync'],
+      },
+      {
+        title: `${userPrompt.slice(0, 30)} - QA Review Gate`,
+        description: 'Verify acceptance criteria and conduct peer review sign-off.',
+        priority: 'medium',
+        storyPoints: 3,
+        estimatedHours: 4,
+        subtasks: ['Run automated regression suite', 'Obtain manager approval'],
+      },
+    ],
+    risks: ['Ensure project membership is assigned prior to task distribution.'],
+    recommendations: ['Enable "Review Gatekeeper" rule in Automations Studio.'],
     createdAt: new Date().toISOString(),
   };
 }
@@ -248,4 +228,3 @@ export async function applyAIProposal(
     createdTasks,
   };
 }
-
