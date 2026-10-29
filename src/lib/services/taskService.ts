@@ -394,7 +394,7 @@ export async function getWorkspaceMembers(workspaceId: string): Promise<UserProf
         .eq('id', authUser.id)
         .maybeSingle();
 
-      const name = profile?.full_name || authUser.email?.split('@')[0] || 'Joy Sarkar';
+      const name = profile?.full_name || authUser.email?.split('@')[0] || 'Member';
       result.unshift({
         id: authUser.id,
         name,
@@ -406,7 +406,7 @@ export async function getWorkspaceMembers(workspaceId: string): Promise<UserProf
             .map((part: string) => part[0])
             .join('')
             .slice(0, 2)
-            .toUpperCase() || 'JS',
+            .toUpperCase() || 'TM',
         role: 'Workspace Owner',
       });
     }
@@ -424,6 +424,30 @@ export async function assignUserToTask(taskId: string, userId: string): Promise<
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Validate task and project membership
+  const { data: taskData } = await supabase
+    .from('tasks')
+    .select('title, workspace_id, project_id, project:projects(workspace_id, name, owner_id, lead_id)')
+    .eq('id', taskId)
+    .single();
+
+  if (!taskData) throw new Error('Task not found');
+
+  const projectId = taskData.project_id;
+  const projectInfo = taskData.project as any;
+
+  // Verify userId is a project member or owner/lead
+  const { data: isMember } = await supabase
+    .from('project_members')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!isMember && projectInfo?.owner_id !== userId && projectInfo?.lead_id !== userId) {
+    throw new Error('Only authorized members of this project can be assigned to deliverables.');
+  }
+
   const { error } = await supabase.from('task_assignees').insert({
     task_id: taskId,
     user_id: userId,
@@ -436,15 +460,9 @@ export async function assignUserToTask(taskId: string, userId: string): Promise<
   // Create an in-app notification for the assigned teammate
   try {
     if (user && userId !== user.id) {
-      const { data: taskData } = await supabase
-        .from('tasks')
-        .select('title, workspace_id, project_id, project:projects(workspace_id, name)')
-        .eq('id', taskId)
-        .maybeSingle();
+      const wsId = taskData.workspace_id || projectInfo?.workspace_id;
 
-      const wsId = taskData?.workspace_id || (taskData?.project as any)?.workspace_id;
-
-      if (taskData && wsId) {
+      if (wsId) {
         await supabase.from('notifications').insert({
           workspace_id: wsId,
           recipient_id: userId,
@@ -452,7 +470,7 @@ export async function assignUserToTask(taskId: string, userId: string): Promise<
           type: 'assigned',
           title: 'Assigned to Deliverable',
           body: `You were assigned to deliverable "${taskData.title}".`,
-          link_url: null,
+          link_url: `/w/${wsId}/tasks`,
         });
       }
     }

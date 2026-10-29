@@ -78,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
     }
     loadSidebarProjects();
-  }, [workspace.id, isDemoMode, pathname, slug]);
+  }, [workspace.id, isDemoMode, slug]);
 
   // Space expansion state
   const [expandedSpaces, setExpandedSpaces] = useState<Record<string, boolean>>({

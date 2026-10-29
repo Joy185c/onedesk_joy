@@ -239,8 +239,12 @@ export default function OwnerDashboardPage() {
             </span>
             <span className="text-xs text-[#778079]">· Live Workspace Sync</span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-[#18251D] tracking-tight">
-            Welcome back, {user.name.split(' ')[0] || 'Joy'}
+          <h1 className="text-2xl md:text-3xl font-extrabold text-[#18251D] tracking-tight min-h-[36px] flex items-center">
+            {loading || !user.name ? (
+              <span className="inline-block h-8 w-44 bg-[#E5E9E6] animate-pulse rounded-lg" />
+            ) : (
+              <span>Welcome back, {user.name.split(' ')[0]}</span>
+            )}
           </h1>
           <p className="text-xs md:text-sm text-[#778079] mt-0.5">
             Here is the centralized pulse across all authorized delivery projects in {workspace.name}.
@@ -314,13 +318,6 @@ export default function OwnerDashboardPage() {
               <Button variant="outline" size="default" className="font-semibold flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-[#064E24]" />
                 <span>Invite Team Members</span>
-              </Button>
-            </Link>
-
-            <Link href="/w/factor-labs">
-              <Button variant="ghost" size="default" className="text-xs text-[#5E6962] flex items-center gap-1">
-                <span>View Factor Labs Showcase</span>
-                <ExternalLink className="w-3.5 h-3.5" />
               </Button>
             </Link>
           </div>

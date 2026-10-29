@@ -15,6 +15,16 @@ export interface UserProfile {
   status?: 'online' | 'busy' | 'away' | 'offline';
 }
 
+export interface ProjectMemberDetail {
+  id: string;
+  userId: string;
+  projectId: string;
+  role: ProjectRole;
+  jobTitle?: string;
+  joinedAt?: string;
+  user: UserProfile;
+}
+
 export interface Workspace {
   id: string;
   name: string;

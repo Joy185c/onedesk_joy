@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { UserProfile, Workspace, WorkspaceRole } from '@/lib/types';
 import { currentUser as mockUser, currentWorkspace as mockWorkspace } from '@/lib/mockData';
+import { invalidateCache } from '@/lib/cache';
 
 export interface WorkspaceContextType {
   user: UserProfile;
@@ -25,33 +26,25 @@ const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefin
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const params = useParams();
   const router = useRouter();
-  const slug = (params?.slug as string) || 'factor-labs';
+  const slug = (params?.slug as string) || '';
 
-  const [user, setUser] = useState<UserProfile>(() =>
-    slug === 'factor-labs'
-      ? mockUser
-      : {
-          id: '',
-          name: '',
-          email: '',
-          initials: '..',
-          role: 'Workspace Owner',
-          status: 'online',
-        }
-  );
-  const [workspace, setWorkspace] = useState<Workspace>(() =>
-    slug === 'factor-labs'
-      ? mockWorkspace
-      : {
-          id: '',
-          name: slug.toUpperCase(),
-          slug: slug,
-          ownerId: '',
-          membersCount: 1,
-          projectsCount: 0,
-        }
-  );
-  const [role, setRole] = useState<WorkspaceRole>('owner');
+  const [user, setUser] = useState<UserProfile>({
+    id: '',
+    name: '',
+    email: '',
+    initials: '..',
+    role: 'Member',
+    status: 'online',
+  });
+  const [workspace, setWorkspace] = useState<Workspace>({
+    id: '',
+    name: slug ? slug.toUpperCase() : 'Workspace',
+    slug: slug || '',
+    ownerId: '',
+    membersCount: 1,
+    projectsCount: 0,
+  });
+  const [role, setRole] = useState<WorkspaceRole>('member');
   const [userWorkspaces, setUserWorkspaces] = useState<
     { id: string; name: string; slug: string; role: WorkspaceRole }[]
   >([]);
@@ -200,9 +193,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
+      setUser({
+        id: '',
+        name: '',
+        email: '',
+        initials: '..',
+        role: 'Member',
+        status: 'online',
+      });
+      invalidateCache();
       router.push('/login');
     } catch (err) {
       console.error('Sign out error:', err);
+      invalidateCache();
       router.push('/login');
     }
   };

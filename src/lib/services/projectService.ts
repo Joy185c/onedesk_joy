@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
-import { ProjectSummary, ProjectHealth, UserProfile } from '@/lib/types';
+import { ProjectSummary, ProjectHealth, UserProfile, ProjectRole, ProjectMemberDetail } from '@/lib/types';
+import { getCache, setCache, invalidateCache } from '@/lib/cache';
 
 export interface CreateProjectInput {
   workspaceId: string;
@@ -151,10 +152,17 @@ export async function createProject(input: CreateProjectInput) {
     console.warn('Auto project_member insertion notice:', mErr);
   }
 
+  // Invalidate cached projects for this workspace
+  invalidateCache(`ws-projects-${wsId}`);
+
   return project;
 }
 
 export async function getWorkspaceProjects(workspaceId: string): Promise<ProjectSummary[]> {
+  const cacheKey = `ws-projects-${workspaceId}`;
+  const cached = getCache<ProjectSummary[]>(cacheKey);
+  if (cached) return cached;
+
   const supabase = createClient();
 
   const { data: projects, error } = await supabase
@@ -169,6 +177,12 @@ export async function getWorkspaceProjects(workspaceId: string): Promise<Project
       owner_id,
       lead_id,
       lead:lead_id (id, full_name, email, avatar_url),
+      project_members (
+        id,
+        role,
+        job_title,
+        user:user_id (id, full_name, email, avatar_url)
+      ),
       tasks:tasks (id, status, due_date)
     `)
     .eq('workspace_id', workspaceId)
@@ -181,7 +195,7 @@ export async function getWorkspaceProjects(workspaceId: string): Promise<Project
 
   if (!projects) return [];
 
-  return projects.map((p: any) => {
+  const result: ProjectSummary[] = projects.map((p: any) => {
     const tasks = p.tasks || [];
     const totalTasks = tasks.length;
     const completedTasks = tasks.filter((t: any) => t.status === 'completed').length;
@@ -205,6 +219,23 @@ export async function getWorkspaceProjects(workspaceId: string): Promise<Project
       avatarUrl: p.lead?.avatar_url || undefined,
     };
 
+    const members: UserProfile[] = (p.project_members || []).map((pm: any) => {
+      const u = pm.user || {};
+      const name = u.full_name || 'Member';
+      return {
+        id: u.id || pm.id,
+        name,
+        email: u.email || '',
+        avatarUrl: u.avatar_url || undefined,
+        initials: name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'TM',
+        role: pm.job_title || (pm.role === 'owner' ? 'Project Lead' : pm.role),
+      };
+    });
+
+    if (members.length === 0) {
+      members.push(leadProfile);
+    }
+
     return {
       id: p.id,
       key: p.key,
@@ -217,10 +248,13 @@ export async function getWorkspaceProjects(workspaceId: string): Promise<Project
       overdueTasks,
       pendingReviews,
       targetDate: p.target_date || 'Ongoing',
-      members: [leadProfile],
+      members,
       lead: leadProfile,
     };
   });
+
+  setCache(cacheKey, result);
+  return result;
 }
 
 export async function getProjectById(projectId: string) {
@@ -236,6 +270,7 @@ export async function getProjectById(projectId: string) {
         id,
         role,
         job_title,
+        joined_at,
         user:user_id(id, full_name, email, avatar_url)
       )
     `)
@@ -244,5 +279,213 @@ export async function getProjectById(projectId: string) {
 
   if (error) throw error;
   return data;
+}
+
+export async function getProjectMembers(projectId: string): Promise<ProjectMemberDetail[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('project_members')
+    .select(`
+      id,
+      project_id,
+      user_id,
+      role,
+      job_title,
+      joined_at,
+      profiles:user_id(
+        id,
+        full_name,
+        email,
+        avatar_url
+      )
+    `)
+    .eq('project_id', projectId)
+    .order('joined_at', { ascending: true });
+
+  if (error) {
+    console.warn('Error fetching project members:', error.message);
+    return [];
+  }
+
+  if (!data) return [];
+
+  return data.map((pm: any) => {
+    const p = pm.profiles || {};
+    const name = p.full_name || p.email?.split('@')[0] || 'Member';
+    return {
+      id: pm.id,
+      projectId: pm.project_id,
+      userId: pm.user_id,
+      role: pm.role as ProjectRole,
+      jobTitle: pm.job_title || (pm.role === 'owner' ? 'Project Lead' : pm.role),
+      joinedAt: pm.joined_at,
+      user: {
+        id: p.id || pm.user_id,
+        name,
+        email: p.email || '',
+        avatarUrl: p.avatar_url || undefined,
+        initials: name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'TM',
+        role: pm.job_title || pm.role,
+      },
+    };
+  });
+}
+
+export async function addProjectMember(
+  projectId: string,
+  userId: string,
+  role: ProjectRole = 'contributor',
+  jobTitle?: string
+): Promise<void> {
+  const supabase = createClient();
+
+  const { error } = await supabase.from('project_members').insert({
+    project_id: projectId,
+    user_id: userId,
+    role,
+    job_title: jobTitle || (role === 'owner' ? 'Project Lead' : role),
+  });
+
+  if (error && error.code !== '23505') {
+    throw error;
+  }
+
+  // Auto-sync into project #general channel
+  try {
+    const { data: generalChan } = await supabase
+      .from('channels')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('slug', 'general')
+      .maybeSingle();
+
+    if (generalChan?.id) {
+      await supabase.from('channel_members').upsert(
+        {
+          channel_id: generalChan.id,
+          user_id: userId,
+          role: role === 'owner' || role === 'manager' ? 'admin' : 'member',
+        },
+        { onConflict: 'channel_id,user_id', ignoreDuplicates: true }
+      );
+    }
+  } catch (syncErr) {
+    console.warn('Project channel membership sync notice:', syncErr);
+  }
+
+  // Invalidate caches
+  invalidateCache();
+}
+
+export async function updateProjectMemberRole(
+  projectId: string,
+  userId: string,
+  role: ProjectRole,
+  jobTitle?: string
+): Promise<void> {
+  const supabase = createClient();
+
+  const updates: any = { role };
+  if (jobTitle !== undefined) updates.job_title = jobTitle;
+
+  const { error } = await supabase
+    .from('project_members')
+    .update(updates)
+    .eq('project_id', projectId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  invalidateCache();
+}
+
+export async function removeProjectMember(projectId: string, userId: string): Promise<void> {
+  const supabase = createClient();
+
+  // Safety check: ensure we do not remove the last owner
+  const { data: owners } = await supabase
+    .from('project_members')
+    .select('user_id')
+    .eq('project_id', projectId)
+    .eq('role', 'owner');
+
+  if (owners && owners.length === 1 && owners[0].user_id === userId) {
+    throw new Error('Cannot remove the sole Project Lead/Owner. Please transfer ownership first.');
+  }
+
+  const { error } = await supabase
+    .from('project_members')
+    .delete()
+    .eq('project_id', projectId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
+
+  // Remove from project channel
+  try {
+    const { data: generalChan } = await supabase
+      .from('channels')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('slug', 'general')
+      .maybeSingle();
+
+    if (generalChan?.id) {
+      await supabase
+        .from('channel_members')
+        .delete()
+        .eq('channel_id', generalChan.id)
+        .eq('user_id', userId);
+    }
+  } catch {
+    // Non-blocking
+  }
+
+  invalidateCache();
+}
+
+export async function getWorkspaceEligibleMembers(
+  workspaceId: string,
+  projectId: string
+): Promise<UserProfile[]> {
+  const supabase = createClient();
+
+  // 1. Get all active workspace members
+  const { data: wsMembers } = await supabase
+    .from('workspace_members')
+    .select(`
+      user_id,
+      role,
+      job_title,
+      profiles:user_id(id, full_name, email, avatar_url)
+    `)
+    .eq('workspace_id', workspaceId)
+    .eq('status', 'active');
+
+  // 2. Get existing project member user_ids
+  const { data: projMembers } = await supabase
+    .from('project_members')
+    .select('user_id')
+    .eq('project_id', projectId);
+
+  const existingIds = new Set((projMembers || []).map((pm) => pm.user_id));
+
+  const eligible: UserProfile[] = [];
+  (wsMembers || []).forEach((m: any) => {
+    if (!existingIds.has(m.user_id)) {
+      const p = m.profiles || {};
+      const name = p.full_name || p.email?.split('@')[0] || 'Team Member';
+      eligible.push({
+        id: p.id || m.user_id,
+        name,
+        email: p.email || '',
+        avatarUrl: p.avatar_url || undefined,
+        initials: name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'TM',
+        role: m.job_title || m.role,
+      });
+    }
+  });
+
+  return eligible;
 }
 

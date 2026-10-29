@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -14,26 +14,32 @@ import {
   Users,
   Plus,
   Settings,
+  UserPlus,
 } from 'lucide-react';
 import { ProjectSummary } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AvatarGroup } from '@/components/ui/avatar';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { ProjectMembersModal } from '@/components/project/ProjectMembersModal';
 
 interface ProjectHeaderProps {
   project: ProjectSummary;
   onOpenQuickCreate: () => void;
+  onProjectUpdated?: () => void;
 }
 
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   project,
   onOpenQuickCreate,
+  onProjectUpdated,
 }) => {
   const pathname = usePathname();
   const { workspace } = useWorkspace();
   const slug = workspace.slug;
   const baseUrl = `/w/${slug}/projects/${project.id}`;
+
+  const [membersModalOpen, setMembersModalOpen] = useState(false);
 
   const tabs = [
     { label: 'Overview', href: `${baseUrl}`, icon: LayoutDashboard },
@@ -73,10 +79,24 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2">
+          <button
+            onClick={() => setMembersModalOpen(true)}
+            className="hidden sm:flex items-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F1F3] transition-colors text-left"
+            title="Manage Project Team"
+          >
             <span className="text-xs text-[#778079]">Team:</span>
             <AvatarGroup users={project.members} max={4} size="sm" />
-          </div>
+          </button>
+
+          <Button
+            onClick={() => setMembersModalOpen(true)}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-1.5 font-semibold text-xs border-[#E5E9E6]"
+          >
+            <UserPlus className="w-3.5 h-3.5 text-[#064E24]" />
+            <span>Manage Team ({project.members.length})</span>
+          </Button>
 
           <Button
             onClick={onOpenQuickCreate}
@@ -88,11 +108,24 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             <span>Add Task</span>
           </Button>
 
-          <Button variant="outline" size="icon" title="Project Settings">
+          <Button
+            onClick={() => setMembersModalOpen(true)}
+            variant="outline"
+            size="icon"
+            title="Project Team Settings"
+          >
             <Settings className="w-4 h-4 text-[#5E6962]" />
           </Button>
         </div>
       </div>
+
+      <ProjectMembersModal
+        isOpen={membersModalOpen}
+        onClose={() => setMembersModalOpen(false)}
+        projectId={project.id}
+        projectName={project.name}
+        onMembersUpdated={onProjectUpdated}
+      />
 
       {/* View Tabs */}
       <div className="flex items-center gap-1 overflow-x-auto no-scrollbar border-t border-[#F0F1F3] -mx-4 md:-mx-8 px-4 md:px-8">

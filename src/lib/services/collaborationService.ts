@@ -106,20 +106,59 @@ export async function getProjectChannel(projectId: string): Promise<Channel | nu
       .limit(1)
       .maybeSingle();
 
-    if (error || !data) return null;
+    if (data) {
+      return {
+        id: data.id,
+        workspaceId: data.workspace_id,
+        projectId: data.project_id,
+        projectName: data.project?.name,
+        projectKey: data.project?.key,
+        name: data.name,
+        description: data.description || undefined,
+        type: data.type as ChannelType,
+        topic: data.topic || undefined,
+        isArchived: Boolean(data.is_archived),
+      };
+    }
 
-    return {
-      id: data.id,
-      workspaceId: data.workspace_id,
-      projectId: data.project_id,
-      projectName: data.project?.name,
-      projectKey: data.project?.key,
-      name: data.name,
-      description: data.description || undefined,
-      type: data.type as ChannelType,
-      topic: data.topic || undefined,
-      isArchived: Boolean(data.is_archived),
-    };
+    // Auto-provision general channel for this project if none exists yet
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('id, name, key, workspace_id, owner_id')
+      .eq('id', projectId)
+      .maybeSingle();
+
+    if (proj) {
+      const { data: newChan } = await supabase
+        .from('channels')
+        .insert({
+          workspace_id: proj.workspace_id,
+          project_id: projectId,
+          name: 'general',
+          slug: 'general',
+          description: `General discussion for project ${proj.name}`,
+          type: 'public',
+          created_by: proj.owner_id,
+        })
+        .select()
+        .maybeSingle();
+
+      if (newChan) {
+        return {
+          id: newChan.id,
+          workspaceId: newChan.workspace_id,
+          projectId: newChan.project_id,
+          projectName: proj.name,
+          projectKey: proj.key,
+          name: newChan.name,
+          description: newChan.description || undefined,
+          type: newChan.type as ChannelType,
+          isArchived: false,
+        };
+      }
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -718,37 +757,62 @@ export async function getChannelMembers(
       .select('user_id, role, created_at, profiles:user_id(id, full_name, email, avatar_url)')
       .eq('channel_id', channelId);
 
-    const { data: wsMembers } = await supabase
-      .from('workspace_members')
-      .select('user_id, role, job_title, profiles:user_id(id, full_name, email, avatar_url)')
-      .eq('workspace_id', workspaceId || channel?.workspace_id);
-
     const memberMap: Record<string, ChannelMemberInfo> = {};
 
-    (wsMembers || []).forEach((wm: any) => {
-      const u = parseProfile(wm.profiles, wm.user_id);
-      if (wm.job_title) u.role = wm.job_title;
-      const ov = overrideMap[wm.user_id];
+    if (channel?.project_id) {
+      // Project channel: Effective members are project_members
+      const { data: projMembers } = await supabase
+        .from('project_members')
+        .select('user_id, role, job_title, profiles:user_id(id, full_name, email, avatar_url)')
+        .eq('project_id', channel.project_id);
 
-      memberMap[wm.user_id] = {
-        user: u,
-        channelRole: ov?.channel_role || (wm.role === 'owner' || wm.role === 'admin' ? 'admin' : 'member'),
-        isBlocked: Boolean(ov?.is_blocked),
-        isRemoved: Boolean(ov?.is_removed),
-      };
-    });
+      (projMembers || []).forEach((pm: any) => {
+        const u = parseProfile(pm.profiles, pm.user_id);
+        if (pm.job_title) u.role = pm.job_title;
+        const ov = overrideMap[pm.user_id];
+
+        memberMap[pm.user_id] = {
+          user: u,
+          channelRole: ov?.channel_role || (pm.role === 'owner' || pm.role === 'manager' ? 'admin' : 'member'),
+          isBlocked: Boolean(ov?.is_blocked),
+          isRemoved: Boolean(ov?.is_removed),
+        };
+      });
+    } else {
+      // Workspace channel: Effective members are workspace_members
+      const { data: wsMembers } = await supabase
+        .from('workspace_members')
+        .select('user_id, role, job_title, profiles:user_id(id, full_name, email, avatar_url)')
+        .eq('workspace_id', workspaceId || channel?.workspace_id);
+
+      (wsMembers || []).forEach((wm: any) => {
+        const u = parseProfile(wm.profiles, wm.user_id);
+        if (wm.job_title) u.role = wm.job_title;
+        const ov = overrideMap[wm.user_id];
+
+        memberMap[wm.user_id] = {
+          user: u,
+          channelRole: ov?.channel_role || (wm.role === 'owner' || wm.role === 'admin' ? 'admin' : 'member'),
+          isBlocked: Boolean(ov?.is_blocked),
+          isRemoved: Boolean(ov?.is_removed),
+        };
+      });
+    }
 
     (explicitMembers || []).forEach((em: any) => {
       const u = parseProfile(em.profiles, em.user_id);
       const ov = overrideMap[em.user_id];
 
-      memberMap[em.user_id] = {
-        user: u,
-        channelRole: ov?.channel_role || (em.role as any) || 'member',
-        isBlocked: Boolean(ov?.is_blocked),
-        isRemoved: Boolean(ov?.is_removed),
-        joinedAt: em.created_at,
-      };
+      // Only add or override if not restricted from project
+      if (!channel?.project_id || memberMap[em.user_id]) {
+        memberMap[em.user_id] = {
+          user: u,
+          channelRole: ov?.channel_role || (em.role as any) || 'member',
+          isBlocked: Boolean(ov?.is_blocked),
+          isRemoved: Boolean(ov?.is_removed),
+          joinedAt: em.created_at,
+        };
+      }
     });
 
     return Object.values(memberMap);

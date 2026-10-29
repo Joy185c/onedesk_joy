@@ -109,20 +109,6 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed 
 
           <div className="h-[1px] bg-[#14482E] my-1.5" />
 
-          {/* Demo workspace link */}
-          <button
-            onClick={() => {
-              setIsOpen(false);
-              router.push('/w/factor-labs');
-            }}
-            className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-[#849E8E] hover:text-white hover:bg-[#12452C] transition-colors"
-          >
-            <div className="flex items-center gap-2 truncate">
-              <Sparkles className="w-3.5 h-3.5 text-[#20E34A]" />
-              <span>Factor Labs (Demo)</span>
-            </div>
-          </button>
-
           <button
             onClick={() => {
               setIsOpen(false);

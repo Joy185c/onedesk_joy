@@ -34,6 +34,7 @@ import {
   unassignUserFromTask,
   getWorkspaceMembers,
 } from '@/lib/services/taskService';
+import { getProjectMembers } from '@/lib/services/projectService';
 import { getTaskComments, addTaskComment } from '@/lib/services/collaborationService';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
@@ -69,10 +70,18 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   }, [task?.id, task?.assignees]);
 
   useEffect(() => {
-    if (isOpen && workspace.id) {
+    if (isOpen && task?.projectId) {
+      getProjectMembers(task.projectId).then((pms) => {
+        const pUsers = pms.map((pm) => ({
+          ...pm.user,
+          role: pm.jobTitle || (pm.role === 'owner' ? 'Project Lead' : pm.role),
+        }));
+        setWorkspaceMembers(pUsers);
+      });
+    } else if (isOpen && workspace.id) {
       getWorkspaceMembers(workspace.id).then(setWorkspaceMembers);
     }
-  }, [isOpen, workspace.id]);
+  }, [isOpen, task?.projectId, workspace.id]);
 
   useEffect(() => {
     if (isOpen && task?.id) {

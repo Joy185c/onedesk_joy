@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { UserAvatar } from '@/components/ui/avatar';
 import { TaskPriority, UserProfile } from '@/lib/types';
 import { createTask, getWorkspaceMembers } from '@/lib/services/taskService';
+import { getProjectMembers } from '@/lib/services/projectService';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface CreateTaskModalProps {
@@ -39,16 +40,28 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isOpen && workspace.id) {
-      getWorkspaceMembers(workspace.id).then((m) => {
-        setMembers(m);
-        // Default to assigning to current user if available
-        if (user.id && m.some((u) => u.id === user.id) && assigneeIds.length === 0) {
-          setAssigneeIds([user.id]);
-        }
-      });
+    if (isOpen) {
+      if (projectId) {
+        getProjectMembers(projectId).then((pms) => {
+          const projectUsers = pms.map((pm) => ({
+            ...pm.user,
+            role: pm.jobTitle || (pm.role === 'owner' ? 'Project Lead' : pm.role),
+          }));
+          setMembers(projectUsers);
+          if (user.id && projectUsers.some((u) => u.id === user.id) && assigneeIds.length === 0) {
+            setAssigneeIds([user.id]);
+          }
+        });
+      } else if (workspace.id) {
+        getWorkspaceMembers(workspace.id).then((m) => {
+          setMembers(m);
+          if (user.id && m.some((u) => u.id === user.id) && assigneeIds.length === 0) {
+            setAssigneeIds([user.id]);
+          }
+        });
+      }
     }
-  }, [isOpen, workspace.id, user.id]);
+  }, [isOpen, projectId, workspace.id, user.id]);
 
   if (!isOpen) return null;
 
