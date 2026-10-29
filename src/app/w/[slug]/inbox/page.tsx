@@ -23,6 +23,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { UserAvatar } from '@/components/ui/avatar';
+import { RichMessageRenderer } from '@/components/chat/RichMessageRenderer';
 import { AppNotification } from '@/lib/types';
 import {
   getNotifications,
@@ -288,9 +289,9 @@ export default function InboxPage() {
                         )}
                       </div>
 
-                      <p className="text-xs text-[#374151] leading-relaxed">
-                        {notif.body}
-                      </p>
+                      <div className="text-xs text-[#374151] leading-relaxed">
+                        <RichMessageRenderer content={notif.body} />
+                      </div>
 
                       {/* Interactive Team Invitation Action Box */}
                       {isInvite && token && (

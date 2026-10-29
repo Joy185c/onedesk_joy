@@ -411,10 +411,10 @@ export async function getWorkspaceMembers(workspaceId: string): Promise<UserProf
       });
     }
 
-    return result.length > 0 ? result : sampleUsers;
+    return result;
   } catch (err) {
     console.warn('Failed to load workspace members:', err);
-    return sampleUsers;
+    return [];
   }
 }
 

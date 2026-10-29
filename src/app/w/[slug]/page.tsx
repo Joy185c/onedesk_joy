@@ -24,7 +24,15 @@ import { CreateProjectModal } from '@/components/project/CreateProjectModal';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { getWorkspaceProjects } from '@/lib/services/projectService';
-import { ProjectSummary } from '@/lib/types';
+import { getWorkspaceMembers } from '@/lib/services/taskService';
+import { createClient } from '@/lib/supabase/client';
+import {
+  ProjectSummary,
+  Task,
+  ReviewRequest,
+  TeamMemberWorkload,
+  ActivityItem,
+} from '@/lib/types';
 import {
   sampleProjects,
   executiveKpis as demoKpis,
@@ -38,22 +46,159 @@ export default function OwnerDashboardPage() {
   const { user, workspace, isOwner, isDemoMode } = useWorkspace();
   const [filterMode, setFilterMode] = useState<'all' | 'my' | 'attention'>('all');
   const [realProjects, setRealProjects] = useState<ProjectSummary[]>([]);
+  const [blockedTasks, setBlockedTasks] = useState<Task[]>([]);
+  const [overdueTasks, setOverdueTasks] = useState<Task[]>([]);
+  const [reviewRequests, setReviewRequests] = useState<ReviewRequest[]>([]);
+  const [workloadData, setWorkloadData] = useState<TeamMemberWorkload[]>([]);
+  const [activityData, setActivityData] = useState<ActivityItem[]>([]);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const loadProjects = async () => {
+  const loadDashboardData = async () => {
     if (isDemoMode) {
       setRealProjects(sampleProjects);
+      setBlockedTasks(sampleTasks.filter((t) => t.isBlocked));
+      setOverdueTasks(
+        sampleTasks.filter(
+          (t) => t.dueDate && new Date(t.dueDate) < new Date('2026-10-29') && t.status !== 'completed'
+        )
+      );
+      setReviewRequests(sampleReviewRequests);
+      setWorkloadData(teamWorkloadData);
+      setActivityData(recentActivityFeed);
       setLoading(false);
       return;
     }
 
     if (workspace.id) {
       try {
-        const projs = await getWorkspaceProjects(workspace.id);
+        const supabase = createClient();
+        const [projs, members] = await Promise.all([
+          getWorkspaceProjects(workspace.id),
+          getWorkspaceMembers(workspace.id),
+        ]);
         setRealProjects(projs);
+
+        // 1. Fetch real tasks for this workspace
+        const { data: rawTasks } = await supabase
+          .from('tasks')
+          .select(`
+            *,
+            project:projects(id, key, name),
+            assignees:task_assignees(
+              user:profiles(id, full_name, email, avatar_url)
+            )
+          `)
+          .eq('workspace_id', workspace.id);
+
+        const allTasks: Task[] = (rawTasks || []).map((t: any) => ({
+          id: t.id,
+          workspaceId: t.workspace_id,
+          projectId: t.project_id,
+          projectName: t.project?.name || 'General Project',
+          projectKey: t.project?.key || 'PRJ',
+          taskNumber: t.task_number || 1,
+          title: t.title,
+          description: t.description || undefined,
+          status: t.status,
+          priority: t.priority,
+          dueDate: t.due_date || undefined,
+          isBlocked: Boolean(t.is_blocked || t.status === 'blocked'),
+          blockedReason: t.block_reason || undefined,
+          reviewRequired: Boolean(t.review_required),
+          assignees: (t.assignees || []).map((a: any) => ({
+            id: a.user?.id || '',
+            name: a.user?.full_name || 'Member',
+            email: a.user?.email || '',
+            avatarUrl: a.user?.avatar_url || undefined,
+            initials: (a.user?.full_name || 'TM').slice(0, 2).toUpperCase(),
+            role: 'Member',
+          })),
+          subtaskCount: 0,
+          completedSubtasks: 0,
+          commentsCount: 0,
+        }));
+
+        // 2. Filter Blocked, Overdue, and Review Pending Tasks
+        const now = new Date();
+        const blocked = allTasks.filter((t) => t.isBlocked);
+        const overdue = allTasks.filter(
+          (t) => t.dueDate && new Date(t.dueDate) < now && t.status !== 'completed'
+        );
+        const reviews: ReviewRequest[] = allTasks
+          .filter((t) => t.status === 'ready_for_review' || (t.reviewRequired && t.status !== 'completed'))
+          .map((t) => ({
+            id: `rev-${t.id}`,
+            taskId: t.id,
+            taskTitle: t.title,
+            projectKey: t.projectKey,
+            projectName: t.projectName,
+            submitter: t.assignees[0] || user,
+            reviewer: user,
+            submittedAt: new Date().toISOString(),
+            state: 'pending' as const,
+            submissionNote: 'Awaiting reviewer sign-off',
+          }));
+
+        setBlockedTasks(blocked);
+        setOverdueTasks(overdue);
+        setReviewRequests(reviews);
+
+        // 3. Compute Real Team Workload
+        const workload: TeamMemberWorkload[] = members.map((m) => {
+          const userTasks = allTasks.filter((t) =>
+            t.assignees.some((a) => a.id === m.id || a.email.toLowerCase() === m.email.toLowerCase())
+          );
+          const overdueCount = userTasks.filter(
+            (t) => t.dueDate && new Date(t.dueDate) < now && t.status !== 'completed'
+          ).length;
+
+          return {
+            user: m,
+            assignedTasksCount: userTasks.length,
+            assignedHours: userTasks.length * 8,
+            capacityHours: 40,
+            overdueTasksCount: overdueCount,
+          };
+        });
+        setWorkloadData(workload);
+
+        // 4. Fetch Real Audit Logs for Unified Activity Feed
+        const { data: auditRows } = await supabase
+          .from('audit_logs')
+          .select('*, actor:actor_id(id, full_name, email, avatar_url)')
+          .eq('workspace_id', workspace.id)
+          .order('created_at', { ascending: false })
+          .limit(8);
+
+        const activities: ActivityItem[] = (auditRows || []).map((a: any) => {
+          const actorName = a.actor?.full_name || 'Teammate';
+          return {
+            id: a.id,
+            actor: {
+              id: a.actor?.id || '',
+              name: actorName,
+              email: a.actor?.email || '',
+              avatarUrl: a.actor?.avatar_url || undefined,
+              initials: actorName.slice(0, 2).toUpperCase(),
+              role: 'Member',
+            },
+            action: (a.action?.includes('review') ? 'submitted_review' : a.action?.includes('status') ? 'updated_status' : 'created_task') as any,
+            targetTitle: a.details?.task_title || a.details?.title || a.resource_type || 'Deliverable',
+            targetType: (a.resource_type || 'task') as any,
+            targetUrl: `/w/${workspace.slug}/tasks`,
+            timestamp: new Date(a.created_at).toLocaleDateString([], {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            projectName: a.details?.project_key || 'Workspace',
+          };
+        });
+        setActivityData(activities);
       } catch (err) {
-        console.error('Error loading projects:', err);
+        console.error('Error loading dashboard data:', err);
       } finally {
         setLoading(false);
       }
@@ -61,15 +206,15 @@ export default function OwnerDashboardPage() {
   };
 
   useEffect(() => {
-    loadProjects();
+    loadDashboardData();
   }, [workspace.id, isDemoMode]);
 
   // Compute dynamic KPIs if real projects exist
   const activeProjectsCount = realProjects.length;
   const totalTasksCount = realProjects.reduce((acc, p) => acc + p.totalTasks, 0);
   const completedTasksCount = realProjects.reduce((acc, p) => acc + p.completedTasks, 0);
-  const overdueTasksCount = realProjects.reduce((acc, p) => acc + p.overdueTasks, 0);
-  const pendingReviewsCount = realProjects.reduce((acc, p) => acc + p.pendingReviews, 0);
+  const overdueTasksCount = overdueTasks.length;
+  const pendingReviewsCount = reviewRequests.length;
 
   const dynamicKpis = isDemoMode
     ? demoKpis
@@ -82,11 +227,6 @@ export default function OwnerDashboardPage() {
         overallVelocity: completedTasksCount > 0 ? 12 : 0,
         weeklyProgressTrend: demoKpis.weeklyProgressTrend,
       };
-
-  const blockedTasks = sampleTasks.filter((t) => t.isBlocked);
-  const overdueTasks = sampleTasks.filter(
-    (t) => t.dueDate && new Date(t.dueDate) < new Date('2026-10-29') && t.status !== 'completed'
-  );
 
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
@@ -206,15 +346,15 @@ export default function OwnerDashboardPage() {
         <ProductivityChart trend={dynamicKpis.weeklyProgressTrend} />
         <NeedsAttention
           blockedTasks={blockedTasks}
-          reviewRequests={sampleReviewRequests}
+          reviewRequests={reviewRequests}
           overdueTasks={overdueTasks}
         />
       </div>
 
       {/* 4. Two-Column Grid: Team Workload & Unified Activity Feed */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TeamWorkload workload={teamWorkloadData} />
-        <RecentActivity activities={recentActivityFeed} />
+        <TeamWorkload workload={workloadData} />
+        <RecentActivity activities={activityData} />
       </div>
 
       {/* Security & Multi-Project Isolation Indicator */}
@@ -238,7 +378,7 @@ export default function OwnerDashboardPage() {
       <CreateProjectModal
         isOpen={createProjectOpen}
         onClose={() => setCreateProjectOpen(false)}
-        onProjectCreated={() => loadProjects()}
+        onProjectCreated={() => loadDashboardData()}
       />
     </div>
   );

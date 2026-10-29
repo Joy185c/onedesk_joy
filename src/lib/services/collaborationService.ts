@@ -270,7 +270,22 @@ export async function sendChatMessage(input: {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error('Authentication required to send message.');
+  if (!user) {
+    if (input.channelId.startsWith('chan-') || input.channelId.startsWith('demo-')) {
+      return {
+        id: `msg-${Date.now()}`,
+        channelId: input.channelId,
+        author: sampleUsers[0],
+        body: input.body.trim(),
+        attachments: input.attachments || [],
+        isPinned: false,
+        isEdited: false,
+        createdAt: new Date().toISOString(),
+        reactions: [],
+      };
+    }
+    throw new Error('Authentication required to send message.');
+  }
 
   const { data, error } = await supabase
     .from('messages')
@@ -288,6 +303,27 @@ export async function sendChatMessage(input: {
     .single();
 
   if (error) throw error;
+
+  // Extract structured mentions: @[Name](userId)
+  const mentionMatches = [...input.body.matchAll(/@\[([^\]]+)\]\(([a-f0-9-]+)\)/gi)];
+  const mentionedUserIds = [...new Set(mentionMatches.map((m) => m[2]))];
+
+  if (mentionedUserIds.length > 0) {
+    try {
+      const mentionRows = mentionedUserIds
+        .filter((uid) => uid !== user.id)
+        .map((uid) => ({
+          message_id: data.id,
+          mentioned_user_id: uid,
+          channel_id: input.channelId,
+        }));
+      if (mentionRows.length > 0) {
+        await supabase.from('message_mentions').insert(mentionRows);
+      }
+    } catch (e) {
+      console.warn('Failed to insert mentions:', e);
+    }
+  }
 
   return {
     id: data.id,
@@ -631,4 +667,224 @@ export async function acceptInvitationByToken(token: string): Promise<any> {
   }
 
   return data;
+}
+
+// ------------------------------------------------------------------------------
+// Channel Membership & Moderation
+// ------------------------------------------------------------------------------
+
+export interface ChannelMemberInfo {
+  user: UserProfile;
+  channelRole: 'admin' | 'moderator' | 'member';
+  isBlocked: boolean;
+  isRemoved: boolean;
+  joinedAt?: string;
+}
+
+export async function getChannelMembers(
+  channelId: string,
+  workspaceId: string
+): Promise<ChannelMemberInfo[]> {
+  if (channelId.startsWith('chan-') || !workspaceId || workspaceId.startsWith('ws-')) {
+    return sampleUsers.map((u, i) => ({
+      user: u,
+      channelRole: (i === 0 ? 'admin' : i === 1 ? 'moderator' : 'member') as any,
+      isBlocked: false,
+      isRemoved: false,
+    }));
+  }
+
+  const supabase = createClient();
+
+  try {
+    const { data: channel } = await supabase
+      .from('channels')
+      .select('id, workspace_id, project_id, type')
+      .eq('id', channelId)
+      .maybeSingle();
+
+    const { data: overrides } = await supabase
+      .from('channel_access_overrides')
+      .select('*')
+      .eq('channel_id', channelId);
+
+    const overrideMap: Record<string, any> = {};
+    (overrides || []).forEach((o: any) => {
+      overrideMap[o.user_id] = o;
+    });
+
+    const { data: explicitMembers } = await supabase
+      .from('channel_members')
+      .select('user_id, role, created_at, profiles:user_id(id, full_name, email, avatar_url)')
+      .eq('channel_id', channelId);
+
+    const { data: wsMembers } = await supabase
+      .from('workspace_members')
+      .select('user_id, role, job_title, profiles:user_id(id, full_name, email, avatar_url)')
+      .eq('workspace_id', workspaceId || channel?.workspace_id);
+
+    const memberMap: Record<string, ChannelMemberInfo> = {};
+
+    (wsMembers || []).forEach((wm: any) => {
+      const u = parseProfile(wm.profiles, wm.user_id);
+      if (wm.job_title) u.role = wm.job_title;
+      const ov = overrideMap[wm.user_id];
+
+      memberMap[wm.user_id] = {
+        user: u,
+        channelRole: ov?.channel_role || (wm.role === 'owner' || wm.role === 'admin' ? 'admin' : 'member'),
+        isBlocked: Boolean(ov?.is_blocked),
+        isRemoved: Boolean(ov?.is_removed),
+      };
+    });
+
+    (explicitMembers || []).forEach((em: any) => {
+      const u = parseProfile(em.profiles, em.user_id);
+      const ov = overrideMap[em.user_id];
+
+      memberMap[em.user_id] = {
+        user: u,
+        channelRole: ov?.channel_role || (em.role as any) || 'member',
+        isBlocked: Boolean(ov?.is_blocked),
+        isRemoved: Boolean(ov?.is_removed),
+        joinedAt: em.created_at,
+      };
+    });
+
+    return Object.values(memberMap);
+  } catch (err) {
+    console.warn('Failed to load channel members:', err);
+    return [];
+  }
+}
+
+export async function removeChannelMember(
+  channelId: string,
+  userId: string,
+  workspaceId: string
+): Promise<void> {
+  if (channelId.startsWith('chan-') || !workspaceId || workspaceId.startsWith('ws-')) return;
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error('Authentication required.');
+
+  const { data: ws } = await supabase
+    .from('workspaces')
+    .select('owner_id')
+    .eq('id', workspaceId)
+    .maybeSingle();
+
+  if (ws && ws.owner_id === userId) {
+    throw new Error('Cannot remove the Workspace Owner from a channel.');
+  }
+
+  await supabase.from('channel_members').delete().eq('channel_id', channelId).eq('user_id', userId);
+
+  const { error } = await supabase.from('channel_access_overrides').upsert({
+    channel_id: channelId,
+    user_id: userId,
+    is_removed: true,
+    created_by: user.id,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) throw error;
+
+  await supabase.from('audit_logs').insert({
+    workspace_id: workspaceId,
+    actor_id: user.id,
+    action: 'channel.member_removed',
+    resource_type: 'channel',
+    resource_id: channelId,
+    details: { removed_user_id: userId },
+  });
+}
+
+export async function blockChannelMember(
+  channelId: string,
+  userId: string,
+  reason?: string,
+  workspaceId?: string
+): Promise<void> {
+  if (channelId.startsWith('chan-') || !workspaceId || workspaceId.startsWith('ws-')) return;
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error('Authentication required.');
+
+  if (workspaceId) {
+    const { data: ws } = await supabase
+      .from('workspaces')
+      .select('owner_id')
+      .eq('id', workspaceId)
+      .maybeSingle();
+
+    if (ws && ws.owner_id === userId) {
+      throw new Error('Cannot block the Workspace Owner from a channel.');
+    }
+  }
+
+  const { error } = await supabase.from('channel_access_overrides').upsert({
+    channel_id: channelId,
+    user_id: userId,
+    is_blocked: true,
+    reason: reason || 'Violation of channel guidelines',
+    created_by: user.id,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) throw error;
+
+  if (workspaceId) {
+    await supabase.from('audit_logs').insert({
+      workspace_id: workspaceId,
+      actor_id: user.id,
+      action: 'channel.member_blocked',
+      resource_type: 'channel',
+      resource_id: channelId,
+      details: { blocked_user_id: userId, reason },
+    });
+  }
+}
+
+export async function unblockChannelMember(
+  channelId: string,
+  userId: string,
+  workspaceId?: string
+): Promise<void> {
+  if (channelId.startsWith('chan-') || !workspaceId || workspaceId.startsWith('ws-')) return;
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error('Authentication required.');
+
+  const { error } = await supabase
+    .from('channel_access_overrides')
+    .update({
+      is_blocked: false,
+      is_removed: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('channel_id', channelId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
+
+  if (workspaceId) {
+    await supabase.from('audit_logs').insert({
+      workspace_id: workspaceId,
+      actor_id: user.id,
+      action: 'channel.member_unblocked',
+      resource_type: 'channel',
+      resource_id: channelId,
+      details: { unblocked_user_id: userId },
+    });
+  }
 }

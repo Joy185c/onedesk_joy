@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { ProjectHeader } from '@/components/project/ProjectHeader';
 import { CreateTaskModal } from '@/components/task/CreateTaskModal';
-import { Hash, Send, Pin, ShieldCheck, MessageSquare, CheckCheck } from 'lucide-react';
+import { Hash, Send, Pin, ShieldCheck, MessageSquare, CheckCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/ui/avatar';
 import { Channel, ChatMessage, ProjectSummary, UserProfile } from '@/lib/types';
@@ -15,8 +15,16 @@ import {
   getChannelMessages,
   sendChatMessage,
   toggleMessageReaction,
+  getChannelMembers,
+  removeChannelMember,
+  blockChannelMember,
+  unblockChannelMember,
+  ChannelMemberInfo,
 } from '@/lib/services/collaborationService';
 import { getWorkspaceMembers } from '@/lib/services/taskService';
+import { RichMessageRenderer } from '@/components/chat/RichMessageRenderer';
+import { MentionSuggestions } from '@/components/chat/MentionSuggestions';
+import { ChannelMembersDrawer } from '@/components/chat/ChannelMembersDrawer';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { createClient } from '@/lib/supabase/client';
 
@@ -35,11 +43,125 @@ export default function ProjectChatPage() {
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [showMembersDrawer, setShowMembersDrawer] = useState(false);
+  const [channelMembers, setChannelMembers] = useState<ChannelMemberInfo[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState<number | null>(null);
+  const [mentionHighlightIndex, setMentionHighlightIndex] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const loadActiveChannelMembers = async (chanId: string) => {
+    if (!workspace.id || !chanId) return;
+    try {
+      const members = await getChannelMembers(chanId, workspace.id);
+      setChannelMembers(members);
+    } catch (err) {
+      console.warn('Failed to load channel members:', err);
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!channel || !workspace.id) return;
+    await removeChannelMember(channel.id, userId, workspace.id);
+    await loadActiveChannelMembers(channel.id);
+  };
+
+  const handleBlockMember = async (userId: string, reason?: string) => {
+    if (!channel || !workspace.id) return;
+    await blockChannelMember(channel.id, userId, reason, workspace.id);
+    await loadActiveChannelMembers(channel.id);
+  };
+
+  const handleUnblockMember = async (userId: string) => {
+    if (!channel || !workspace.id) return;
+    await unblockChannelMember(channel.id, userId, workspace.id);
+    await loadActiveChannelMembers(channel.id);
+  };
+
+  const currentUserChannelRole = (
+    workspace.ownerId === user.id
+      ? 'admin'
+      : channelMembers.find((m) => m.user.id === user.id)?.channelRole || 'member'
+  ) as 'admin' | 'moderator' | 'member';
+
+  const eligibleMentionMembers = channelMembers
+    .filter((m) => !m.isBlocked && !m.isRemoved)
+    .map((m) => m.user);
+
+  const filteredMentionSuggestions = eligibleMentionMembers.filter((u) => {
+    if (!mentionQuery) return true;
+    const q = mentionQuery.toLowerCase();
+    return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+  });
+
+  const handleComposerChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    const pos = e.target.selectionStart;
+    setInputText(val);
+
+    const textBeforeCursor = val.slice(0, pos);
+    const match = textBeforeCursor.match(/@([a-zA-Z0-9_]*)$/);
+    if (match) {
+      setMentionQuery(match[1]);
+      setMentionIndex(pos - match[1].length - 1);
+      setMentionHighlightIndex(0);
+    } else {
+      setMentionQuery(null);
+    }
+  };
+
+  const insertMention = (targetUser: UserProfile) => {
+    if (mentionIndex === null) return;
+    const before = inputText.slice(0, mentionIndex);
+    const after = inputText.slice(mentionIndex + (mentionQuery?.length || 0) + 1);
+    const mentionToken = `@[${targetUser.name}](${targetUser.id}) `;
+    setInputText(`${before}${mentionToken}${after}`);
+    setMentionQuery(null);
+    setTimeout(() => {
+      if (composerRef.current) {
+        composerRef.current.focus();
+        const newPos = before.length + mentionToken.length;
+        composerRef.current.setSelectionRange(newPos, newPos);
+      }
+    }, 10);
+  };
+
+  const handleComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionQuery !== null && filteredMentionSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionHighlightIndex((prev) => (prev + 1) % filteredMentionSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionHighlightIndex(
+          (prev) => (prev - 1 + filteredMentionSuggestions.length) % filteredMentionSuggestions.length
+        );
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(filteredMentionSuggestions[mentionHighlightIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage(e);
+    }
   };
 
   useEffect(() => {
@@ -89,6 +211,7 @@ export default function ProjectChatPage() {
         setChannel(projChan);
 
         if (projChan) {
+          loadActiveChannelMembers(projChan.id);
           const msgs = await getChannelMessages(projChan.id);
           setMessages(msgs);
           setTimeout(scrollToBottom, 100);
@@ -196,9 +319,22 @@ export default function ProjectChatPage() {
               </span>
             </div>
 
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#064E24] bg-[#E9FBEA] px-2.5 py-1 rounded-full border border-[#C6F5CB]">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#20E34A]" />
-              <span>Project Isolation Active</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowMembersDrawer(true)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-xl border border-[#CBD3CE] bg-white hover:bg-[#E9FBEA] hover:border-[#20E34A] text-xs font-semibold text-[#18251D] transition-colors"
+                title="Channel Members"
+              >
+                <Users className="w-3.5 h-3.5 text-[#064E24]" />
+                <span>Members</span>
+                <span className="bg-[#F0F1F3] border border-[#CBD3CE] text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full">
+                  {channelMembers.filter((m) => !m.isRemoved && !m.isBlocked).length}
+                </span>
+              </button>
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#064E24] bg-[#E9FBEA] px-2.5 py-1 rounded-full border border-[#C6F5CB]">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#20E34A]" />
+                <span>Project Isolation Active</span>
+              </div>
             </div>
           </div>
 
@@ -276,7 +412,7 @@ export default function ProjectChatPage() {
                             : 'bg-white text-[#18251D] border border-[#CBD3CE] rounded-bl-xs'
                         }`}
                       >
-                        <div className="whitespace-pre-wrap">{msg.body}</div>
+                        <RichMessageRenderer content={msg.body} isCurrentUser={isAuthor} />
 
                         <div
                           className={`flex items-center gap-1.5 mt-1 text-[10px] font-mono ${
@@ -352,17 +488,22 @@ export default function ProjectChatPage() {
           {/* Composer */}
           <div className="p-4 bg-white border-t border-[#E5E9E6]">
             <form onSubmit={handleSendMessage} className="relative">
+              {mentionQuery !== null && (
+                <MentionSuggestions
+                  members={channelMembers.filter((m) => !m.isBlocked && !m.isRemoved).map((m) => m.user)}
+                  query={mentionQuery}
+                  selectedIndex={mentionHighlightIndex}
+                  onSelect={insertMention}
+                  onClose={() => setMentionQuery(null)}
+                />
+              )}
               <textarea
+                ref={composerRef}
                 rows={2}
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage(e);
-                  }
-                }}
-                placeholder={`Message #${channel?.name || 'general'}...`}
+                onChange={handleComposerChange}
+                onKeyDown={handleComposerKeyDown}
+                placeholder={`Message #${channel?.name || 'general'}... (Press @ to mention teammates, Enter to send)`}
                 className="w-full px-4 py-3 rounded-2xl border border-[#CBD3CE] bg-[#F7F8F8] text-xs text-[#18251D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#20E34A] resize-none"
               />
               <div className="absolute right-3 bottom-3">
@@ -381,6 +522,20 @@ export default function ProjectChatPage() {
           </div>
         </div>
       </div>
+
+      {/* Channel Members & Moderation Drawer */}
+      <ChannelMembersDrawer
+        isOpen={showMembersDrawer}
+        onClose={() => setShowMembersDrawer(false)}
+        channelName={channel?.name || 'general'}
+        members={channelMembers}
+        currentUser={user}
+        isWorkspaceOwner={workspace.ownerId === user.id}
+        isChannelAdmin={currentUserChannelRole === 'admin'}
+        onRemoveMember={handleRemoveMember}
+        onBlockMember={handleBlockMember}
+        onUnblockMember={handleUnblockMember}
+      />
 
       <CreateTaskModal
         isOpen={createTaskOpen}

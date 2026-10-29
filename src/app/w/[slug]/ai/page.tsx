@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { RichMessageRenderer } from '@/components/chat/RichMessageRenderer';
 import { Input } from '@/components/ui/input';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { AIProposalPlan, TaskPriority } from '@/lib/types';
@@ -286,7 +287,7 @@ export default function AIAssistantPage() {
                       : 'bg-white text-[#18251D] border border-[#E5E9E6] rounded-tl-none shadow-xs'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  <RichMessageRenderer content={msg.content} isCurrentUser={isUser} />
                   <div
                     className={`text-[10px] mt-2 font-mono ${
                       isUser ? 'text-[#8E9891]' : 'text-[#778079]'

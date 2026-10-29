@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { UserAvatar } from '@/components/ui/avatar';
+import { RichMessageRenderer } from '@/components/chat/RichMessageRenderer';
 import {
   updateTaskStatus,
   updateTaskPriority,
@@ -460,8 +461,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                         })}
                       </span>
                     </div>
-                    <div className="text-xs text-[#5E6962] leading-relaxed pl-7">
-                      {c.content}
+                    <div className="pl-7">
+                      <RichMessageRenderer content={c.content} />
                     </div>
                   </div>
                 ))
