@@ -31,6 +31,11 @@ export default function ProjectTimelinePage() {
         setProject(p);
       } else {
         const rawProj = await getProjectById(projectId);
+        if (!rawProj) {
+          setProject(null);
+          setLoading(false);
+          return;
+        }
         const rawTasks = await getProjectTasks(projectId);
         setProject({
           id: rawProj.id,

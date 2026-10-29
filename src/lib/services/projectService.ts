@@ -181,7 +181,8 @@ export async function getWorkspaceProjects(workspaceId: string): Promise<Project
         id,
         role,
         job_title,
-        user:user_id (id, full_name, email, avatar_url)
+        created_at,
+        profiles:user_id (id, full_name, email, avatar_url)
       ),
       tasks:tasks (id, status, due_date)
     `)
@@ -220,7 +221,7 @@ export async function getWorkspaceProjects(workspaceId: string): Promise<Project
     };
 
     const members: UserProfile[] = (p.project_members || []).map((pm: any) => {
-      const u = pm.user || {};
+      const u = pm.profiles || {};
       const name = u.full_name || 'Member';
       return {
         id: u.id || pm.id,
@@ -260,25 +261,52 @@ export async function getWorkspaceProjects(workspaceId: string): Promise<Project
 export async function getProjectById(projectId: string) {
   const supabase = createClient();
 
-  const { data, error } = await supabase
+  // 1. Fetch project with owner and lead
+  const { data: project, error: projErr } = await supabase
     .from('projects')
     .select(`
       *,
       owner:owner_id(id, full_name, email, avatar_url),
-      lead:lead_id(id, full_name, email, avatar_url),
-      project_members(
+      lead:lead_id(id, full_name, email, avatar_url)
+    `)
+    .eq('id', projectId)
+    .maybeSingle();
+
+  if (projErr) {
+    console.error('Error fetching project:', projErr.message);
+    throw projErr;
+  }
+  if (!project) return null;
+
+  // 2. Fetch project members with profiles
+  try {
+    const { data: members, error: memErr } = await supabase
+      .from('project_members')
+      .select(`
         id,
         role,
         job_title,
-        joined_at,
-        user:user_id(id, full_name, email, avatar_url)
-      )
-    `)
-    .eq('id', projectId)
-    .single();
+        created_at,
+        profiles:user_id(id, full_name, email, avatar_url)
+      `)
+      .eq('project_id', projectId);
 
-  if (error) throw error;
-  return data;
+    if (!memErr && members) {
+      project.project_members = members.map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        job_title: m.job_title,
+        created_at: m.created_at,
+        user: m.profiles || {},
+      }));
+    } else {
+      project.project_members = [];
+    }
+  } catch {
+    project.project_members = [];
+  }
+
+  return project;
 }
 
 export async function getProjectMembers(projectId: string): Promise<ProjectMemberDetail[]> {
@@ -292,7 +320,7 @@ export async function getProjectMembers(projectId: string): Promise<ProjectMembe
       user_id,
       role,
       job_title,
-      joined_at,
+      created_at,
       profiles:user_id(
         id,
         full_name,
@@ -301,7 +329,7 @@ export async function getProjectMembers(projectId: string): Promise<ProjectMembe
       )
     `)
     .eq('project_id', projectId)
-    .order('joined_at', { ascending: true });
+    .order('created_at', { ascending: true });
 
   if (error) {
     console.warn('Error fetching project members:', error.message);
@@ -319,7 +347,7 @@ export async function getProjectMembers(projectId: string): Promise<ProjectMembe
       userId: pm.user_id,
       role: pm.role as ProjectRole,
       jobTitle: pm.job_title || (pm.role === 'owner' ? 'Project Lead' : pm.role),
-      joinedAt: pm.joined_at,
+      joinedAt: pm.created_at || pm.joined_at,
       user: {
         id: p.id || pm.user_id,
         name,

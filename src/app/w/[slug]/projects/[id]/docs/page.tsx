@@ -50,27 +50,29 @@ export default function ProjectDocsPage() {
           setProject(p);
         } else {
           const rawProj = await getProjectById(projectId);
-          setProject({
-            id: rawProj.id,
-            key: rawProj.key,
-            name: rawProj.name,
-            spaceId: rawProj.space_id || 'sp-general',
-            health: rawProj.health || 'on_track',
-            progressPercent: 50,
-            totalTasks: 0,
-            completedTasks: 0,
-            overdueTasks: 0,
-            pendingReviews: 0,
-            targetDate: rawProj.target_date || 'Ongoing',
-            members: [],
-            lead: {
-              id: rawProj.lead?.id || rawProj.owner?.id || '',
-              name: rawProj.lead?.full_name || rawProj.owner?.full_name || 'Lead',
-              email: rawProj.lead?.email || '',
-              initials: 'PL',
-              role: 'Lead',
-            },
-          });
+          if (rawProj) {
+            setProject({
+              id: rawProj.id,
+              key: rawProj.key,
+              name: rawProj.name,
+              spaceId: rawProj.space_id || 'sp-general',
+              health: rawProj.health || 'on_track',
+              progressPercent: 50,
+              totalTasks: 0,
+              completedTasks: 0,
+              overdueTasks: 0,
+              pendingReviews: 0,
+              targetDate: rawProj.target_date || 'Ongoing',
+              members: [],
+              lead: {
+                id: rawProj.lead?.id || rawProj.owner?.id || '',
+                name: rawProj.lead?.full_name || rawProj.owner?.full_name || 'Lead',
+                email: rawProj.lead?.email || '',
+                initials: 'PL',
+                role: 'Lead',
+              },
+            });
+          }
         }
 
         const projectDocs = await getDocuments(workspace.id, projectId);

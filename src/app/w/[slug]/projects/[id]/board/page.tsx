@@ -31,6 +31,11 @@ export default function ProjectBoardPage() {
         setTasks(sampleTasks.filter((st) => st.projectId === p.id));
       } else {
         const rawProj = await getProjectById(projectId);
+        if (!rawProj) {
+          setProject(null);
+          setLoading(false);
+          return;
+        }
         const rawTasks = await getProjectTasks(projectId);
 
         setProject({
