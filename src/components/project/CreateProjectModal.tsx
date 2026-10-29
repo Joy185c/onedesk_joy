@@ -58,7 +58,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
       const cleanKey = (key.trim() || name.substring(0, 3)).toUpperCase().replace(/[^A-Z0-9]/g, '');
 
       const project = await createProject({
-        workspaceId: workspace.id,
+        workspaceId: workspace.id || workspace.slug,
         name: name.trim(),
         key: cleanKey,
         description,

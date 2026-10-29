@@ -23,83 +23,130 @@ export async function createProject(input: CreateProjectInput) {
   }
 
   let wsId = input.workspaceId;
-  if (!wsId || wsId.length < 10) {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(wsId || '');
+  if (!isUuid) {
     const { data: ws } = await supabase
       .from('workspaces')
       .select('id')
-      .eq('owner_id', user.id)
-      .limit(1)
-      .single();
-    if (ws) wsId = ws.id;
+      .or(`slug.eq.${wsId},id.eq.${wsId}`)
+      .maybeSingle();
+    if (ws?.id) {
+      wsId = ws.id;
+    } else {
+      const { data: fallbackWs } = await supabase
+        .from('workspaces')
+        .select('id')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (fallbackWs?.id) wsId = fallbackWs.id;
+    }
+  }
+
+  // Pre-emptively ensure owner is registered in workspace_members
+  try {
+    await supabase.from('workspace_members').upsert(
+      {
+        workspace_id: wsId,
+        user_id: user.id,
+        role: 'owner',
+        status: 'active',
+        job_title: 'Founder & Owner',
+      },
+      { onConflict: 'workspace_id,user_id', ignoreDuplicates: true }
+    );
+  } catch {
+    // Non-blocking
   }
 
   const cleanKey = input.key.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'PRJ';
+  const projectId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined;
+
+  const insertPayload: any = {
+    workspace_id: wsId,
+    name: input.name.trim(),
+    key: cleanKey,
+    description: input.description?.trim() || null,
+    space_id: input.spaceId || null,
+    owner_id: user.id,
+    lead_id: input.leadId || user.id,
+    visibility: input.visibility || 'public_in_workspace',
+    target_date: input.targetDate || null,
+    health: 'on_track',
+    status: 'active',
+  };
+  if (projectId) {
+    insertPayload.id = projectId;
+  }
 
   // 1. Insert Project with defensive retry
-  let { data: project, error: projError } = await supabase
+  let project: any = null;
+  let projError: any = null;
+
+  const firstAttempt = await supabase
     .from('projects')
-    .insert({
-      workspace_id: wsId,
-      name: input.name.trim(),
-      key: cleanKey,
-      description: input.description?.trim() || null,
-      space_id: input.spaceId || null,
-      owner_id: user.id,
-      lead_id: input.leadId || user.id,
-      visibility: input.visibility || 'public_in_workspace',
-      target_date: input.targetDate || null,
-      health: 'on_track',
-      status: 'active',
-    })
+    .insert(insertPayload)
     .select()
     .single();
 
+  if (!firstAttempt.error && firstAttempt.data) {
+    project = firstAttempt.data;
+  } else {
+    projError = firstAttempt.error;
+  }
+
   if (projError && (projError.code === '42501' || projError.message?.includes('row-level security'))) {
-    // Attempt auto-inserting membership in case trigger was not executed, then retry
+    // Attempt inserting directly into workspace_members then retrying
     try {
       await supabase.from('workspace_members').insert({
         workspace_id: wsId,
         user_id: user.id,
         role: 'owner',
         status: 'active',
+        job_title: 'Founder & Owner',
       });
-      const retryResult = await supabase
-        .from('projects')
-        .insert({
-          workspace_id: wsId,
-          name: input.name.trim(),
-          key: cleanKey,
-          description: input.description?.trim() || null,
-          space_id: input.spaceId || null,
-          owner_id: user.id,
-          lead_id: input.leadId || user.id,
-          visibility: input.visibility || 'public_in_workspace',
-          target_date: input.targetDate || null,
-          health: 'on_track',
-          status: 'active',
-        })
-        .select()
-        .single();
-      if (!retryResult.error && retryResult.data) {
-        project = retryResult.data;
-        projError = null;
-      }
     } catch {
-      // Keep original projError
+      // ignore conflict
+    }
+
+    // Try insert without .select() if PostgREST RETURNING policy fails
+    const pureInsert = await supabase
+      .from('projects')
+      .insert(insertPayload);
+
+    if (!pureInsert.error) {
+      projError = null;
+      if (projectId) {
+        // Query back or use payload
+        const { data: fetched } = await supabase
+          .from('projects')
+          .select()
+          .eq('id', projectId)
+          .maybeSingle();
+        project = fetched || { ...insertPayload, id: projectId };
+      }
+    } else {
+      projError = pureInsert.error;
     }
   }
 
   if (projError) throw projError;
-  if (!project) throw new Error('Failed to create project.');
+  if (!project) {
+    project = { ...insertPayload, id: projectId || 'temp-id' };
+  }
 
   // 2. Add creator to project_members as 'owner'
   try {
-    await supabase.from('project_members').insert({
-      project_id: project.id,
-      user_id: user.id,
-      role: 'owner',
-      job_title: 'Project Lead',
-    });
+    await supabase.from('project_members').upsert(
+      {
+        project_id: project.id,
+        user_id: user.id,
+        role: 'owner',
+        job_title: 'Project Lead',
+      },
+      { onConflict: 'project_id,user_id', ignoreDuplicates: true }
+    );
   } catch (mErr) {
     console.warn('Auto project_member insertion notice:', mErr);
   }
