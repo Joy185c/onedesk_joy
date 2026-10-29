@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { UserAvatar } from '@/components/ui/avatar';
 import { AppNotification } from '@/lib/types';
 import {
   getNotifications,
@@ -275,6 +276,9 @@ export default function InboxPage() {
                             <Sparkles className="w-3 h-3 text-[#20E34A]" />
                             <span>Team Invitation</span>
                           </span>
+                        )}
+                        {notif.actor && (
+                          <UserAvatar user={notif.actor} size="xs" />
                         )}
                         <span className="text-xs font-bold text-[#18251D]">
                           {notif.title}

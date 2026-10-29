@@ -29,3 +29,4 @@ export async function GET() {
     statusText: 'Semantic Heuristic Engine (Add GEMINI_API_KEY to .env.local for live LLM)',
   });
 }
+

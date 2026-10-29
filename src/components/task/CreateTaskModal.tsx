@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, CheckSquare, Calendar, AlertCircle, ShieldCheck, Clock, User, Users, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { UserAvatar } from '@/components/ui/avatar';
 import { TaskPriority, UserProfile } from '@/lib/types';
 import { createTask, getWorkspaceMembers } from '@/lib/services/taskService';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -232,9 +233,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       key={id}
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#E9FBEA] border border-[#C6F5CB] text-xs font-semibold text-[#064E24]"
                     >
-                      <span className="w-4 h-4 rounded-full bg-[#082F1B] text-white flex items-center justify-center text-[9px] font-bold">
-                        {initials}
-                      </span>
+                      <UserAvatar user={m} size="xs" />
                       <span>{name}</span>
                       <button
                         type="button"

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { UserAvatar } from '@/components/ui/avatar';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer';
 import { Task, ProjectSummary, TaskStatus, TaskPriority } from '@/lib/types';
 import { getWorkspaceProjects } from '@/lib/services/projectService';
@@ -225,10 +226,8 @@ export default function AllTasksPage() {
                       </td>
                       <td className="py-3 px-4 text-[#18251D]">
                         {task.assignees.length > 0 ? (
-                          <div className="flex items-center gap-1">
-                            <span className="w-4 h-4 rounded-full bg-[#082F1B] text-white flex items-center justify-center font-bold text-[8px]">
-                              {task.assignees[0].initials}
-                            </span>
+                          <div className="flex items-center gap-1.5">
+                            <UserAvatar user={task.assignees[0]} size="xs" />
                             <span className="truncate max-w-[80px]">
                               {task.assignees[0].name.split(' ')[0]}
                             </span>

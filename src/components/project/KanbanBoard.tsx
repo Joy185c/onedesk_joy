@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Task, TaskStatus, TaskPriority } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { Avatar } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/avatar';
 
 interface KanbanBoardProps {
   tasks: Task[];
@@ -181,15 +181,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         </div>
 
                         {/* Assignees */}
-                        <div className="flex items-center -space-x-1.5">
-                          {task.assignees.slice(0, 2).map((a) => (
-                            <div
+                        <div className="flex items-center -space-x-1">
+                          {task.assignees.slice(0, 3).map((a) => (
+                            <UserAvatar
                               key={a.id}
-                              className="w-5 h-5 rounded-full bg-[#12452C] text-white flex items-center justify-center font-bold text-[9px] border border-white"
-                              title={a.name}
-                            >
-                              {a.initials}
-                            </div>
+                              user={a}
+                              size="xs"
+                              className="ring-1 ring-white"
+                            />
                           ))}
                         </div>
                       </div>

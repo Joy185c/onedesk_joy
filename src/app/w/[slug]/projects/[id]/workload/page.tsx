@@ -10,6 +10,7 @@ import { getProjectById } from '@/lib/services/projectService';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Users, Clock, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { UserAvatar } from '@/components/ui/avatar';
 
 export default function ProjectWorkloadPage() {
   const params = useParams();
@@ -88,9 +89,7 @@ export default function ProjectWorkloadPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#082F1B] text-white flex items-center justify-center font-bold text-xs">
-                      {item.user.initials}
-                    </div>
+                    <UserAvatar user={item.user} size="lg" />
                     <div>
                       <h4 className="text-sm font-bold text-[#18251D]">{item.user.name}</h4>
                       <p className="text-[11px] text-[#778079]">{item.user.role}</p>

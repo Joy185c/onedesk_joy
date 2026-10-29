@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { UserAvatar } from '@/components/ui/avatar';
 import { Goal, GoalStatus, ProjectSummary } from '@/lib/types';
 import { getGoals, createGoal } from '@/lib/services/productivityService';
 import { getWorkspaceProjects } from '@/lib/services/projectService';
@@ -237,10 +238,8 @@ export default function GoalsPage() {
                   </span>
                 </div>
                 {goal.owner && (
-                  <div className="flex items-center gap-1 text-[#18251D] font-medium">
-                    <span className="w-4 h-4 rounded-full bg-[#082F1B] text-white flex items-center justify-center font-bold text-[8px]">
-                      {goal.owner.initials}
-                    </span>
+                  <div className="flex items-center gap-1.5 text-[#18251D] font-medium">
+                    <UserAvatar user={goal.owner} size="xs" />
                     <span>{goal.owner.name}</span>
                   </div>
                 )}

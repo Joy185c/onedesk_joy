@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { UserAvatar } from '@/components/ui/avatar';
 import { TimeEntry, ProjectSummary, Task } from '@/lib/types';
 import {
   getTimeEntries,
@@ -372,10 +373,8 @@ export default function TimeTrackingPage() {
                         {entry.description || '—'}
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1.5 text-[#18251D]">
-                          <span className="w-4 h-4 rounded-full bg-[#082F1B] text-white flex items-center justify-center font-bold text-[8px]">
-                            {entry.user.initials}
-                          </span>
+                        <div className="flex items-center gap-2 text-[#18251D]">
+                          <UserAvatar user={entry.user} size="xs" />
                           <span>{entry.user.name}</span>
                         </div>
                       </td>

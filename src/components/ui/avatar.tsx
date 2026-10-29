@@ -30,6 +30,10 @@ export const Avatar: React.FC<AvatarProps> = ({
   const src = propSrc || user?.avatarUrl;
   const status = propStatus || user?.status || 'offline';
 
+  React.useEffect(() => {
+    setImageError(false);
+  }, [src]);
+
   const initials =
     propInitials ||
     user?.initials ||

@@ -16,23 +16,25 @@ import {
 } from '@/lib/mockData';
 
 // Helper to format profile
-function parseProfile(raw: any): UserProfile {
-  const name = raw?.full_name || raw?.email?.split('@')[0] || 'Team Member';
+function parseProfile(raw: any, fallbackId?: string): UserProfile {
+  const item = Array.isArray(raw) ? raw[0] : raw;
+  const name = item?.full_name || item?.email?.split('@')[0] || 'Team Member';
   const initials =
     name
       .split(' ')
+      .filter(Boolean)
       .map((p: string) => p[0])
       .join('')
       .slice(0, 2)
       .toUpperCase() || 'TM';
 
   return {
-    id: raw?.id || '',
+    id: item?.id || fallbackId || '',
     name,
-    email: raw?.email || '',
-    avatarUrl: raw?.avatar_url || undefined,
+    email: item?.email || '',
+    avatarUrl: item?.avatar_url || undefined,
     initials,
-    role: raw?.job_title || 'Member',
+    role: item?.job_title || 'Member',
   };
 }
 
@@ -208,7 +210,7 @@ export async function getChannelMessages(channelId: string): Promise<ChatMessage
       .from('messages')
       .select(`
         *,
-        author:profiles(id, full_name, email, avatar_url),
+        author:author_id(id, full_name, email, avatar_url),
         reactions:message_reactions(
           id,
           emoji,
@@ -242,7 +244,7 @@ export async function getChannelMessages(channelId: string): Promise<ChatMessage
       return {
         id: m.id,
         channelId: m.channel_id,
-        author: parseProfile(m.author),
+        author: parseProfile(m.author, m.author_id),
         parentMessageId: m.parent_message_id || undefined,
         body: m.body,
         attachments: m.attachments || [],
@@ -281,7 +283,7 @@ export async function sendChatMessage(input: {
     })
     .select(`
       *,
-      author:profiles(id, full_name, email, avatar_url)
+      author:author_id(id, full_name, email, avatar_url)
     `)
     .single();
 
@@ -290,7 +292,7 @@ export async function sendChatMessage(input: {
   return {
     id: data.id,
     channelId: data.channel_id,
-    author: parseProfile(data.author),
+    author: parseProfile(data.author, data.author_id || user.id),
     parentMessageId: data.parent_message_id || undefined,
     body: data.body,
     attachments: data.attachments || [],

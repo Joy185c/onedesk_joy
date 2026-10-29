@@ -21,6 +21,7 @@ import { Task, TaskStatus, TaskPriority, UserProfile, TaskComment } from '@/lib/
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { UserAvatar } from '@/components/ui/avatar';
 import {
   updateTaskStatus,
   updateTaskPriority,
@@ -295,11 +296,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                 taskAssignees.map((assignee) => (
                   <div
                     key={assignee.id}
-                    className="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-xl bg-white border border-[#CBD3CE] text-xs font-semibold text-[#18251D] shadow-2xs group"
+                    className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl bg-white border border-[#CBD3CE] text-xs font-semibold text-[#18251D] shadow-2xs group"
                   >
-                    <div className="w-5 h-5 rounded-full bg-[#082F1B] text-[#20E34A] flex items-center justify-center font-bold text-[9px]">
-                      {assignee.initials}
-                    </div>
+                    <UserAvatar user={assignee} size="xs" />
                     <span>{assignee.name}</span>
                     <button
                       type="button"
@@ -451,9 +450,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-[#082F1B] text-white flex items-center justify-center font-bold text-[9px]">
-                          {c.author.initials}
-                        </div>
+                        <UserAvatar user={c.author} size="xs" />
                         <span className="text-xs font-bold text-[#18251D]">{c.author.name}</span>
                       </div>
                       <span className="text-[10px] text-[#778079]">

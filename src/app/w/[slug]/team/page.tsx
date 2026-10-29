@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { UserAvatar } from '@/components/ui/avatar';
 import { UserProfile } from '@/lib/types';
 import { getWorkspaceMembers } from '@/lib/services/taskService';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -87,9 +88,7 @@ export default function TeamDirectoryPage() {
             className="bg-white rounded-2xl border border-[#E5E9E6] p-5 shadow-card hover:border-[#CBD3CE] transition-all space-y-3"
           >
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#082F1B] text-[#20E34A] flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs">
-                {member.initials}
-              </div>
+              <UserAvatar user={member} size="lg" />
               <div className="min-w-0">
                 <h4 className="text-sm font-extrabold text-[#18251D] truncate">{member.name}</h4>
                 <p className="text-xs text-[#778079] truncate">{member.role}</p>

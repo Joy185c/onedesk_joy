@@ -125,3 +125,4 @@ assert.strictEqual(validateAvatarFile('image/png', 6 * 1024 * 1024).valid, false
 console.log('✓ Universal Profile Picture Validation PASSED.');
 
 console.log('\n--- ALL VERIFICATION TESTS PASSED SUCCESSFULLY! ---\n');
+

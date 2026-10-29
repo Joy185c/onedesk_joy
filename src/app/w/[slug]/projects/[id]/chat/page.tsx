@@ -4,9 +4,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { ProjectHeader } from '@/components/project/ProjectHeader';
 import { CreateTaskModal } from '@/components/task/CreateTaskModal';
-import { Hash, Send, Pin, ShieldCheck, MessageSquare } from 'lucide-react';
+import { Hash, Send, Pin, ShieldCheck, MessageSquare, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Channel, ChatMessage, ProjectSummary } from '@/lib/types';
+import { UserAvatar } from '@/components/ui/avatar';
+import { Channel, ChatMessage, ProjectSummary, UserProfile } from '@/lib/types';
 import { sampleProjects } from '@/lib/mockData';
 import { getProjectById } from '@/lib/services/projectService';
 import {
@@ -15,6 +16,7 @@ import {
   sendChatMessage,
   toggleMessageReaction,
 } from '@/lib/services/collaborationService';
+import { getWorkspaceMembers } from '@/lib/services/taskService';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { createClient } from '@/lib/supabase/client';
 
@@ -28,6 +30,7 @@ export default function ProjectChatPage() {
   const [project, setProject] = useState<ProjectSummary | null>(null);
   const [channel, setChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [memberMap, setMemberMap] = useState<Record<string, UserProfile>>({});
   const [inputText, setInputText] = useState('');
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -42,6 +45,17 @@ export default function ProjectChatPage() {
   useEffect(() => {
     async function load() {
       try {
+        if (workspace?.id) {
+          getWorkspaceMembers(workspace.id).then((mList) => {
+            const map: Record<string, UserProfile> = {};
+            mList.forEach((m) => {
+              if (m.id) map[m.id] = m;
+              if (m.email) map[m.email.toLowerCase()] = m;
+              if (m.name) map[m.name.toLowerCase()] = m;
+            });
+            setMemberMap(map);
+          });
+        }
         if (isDemoMode || projectId.startsWith('prj-') || projectId.startsWith('proj-')) {
           const p = sampleProjects.find((sp) => sp.id === projectId) || sampleProjects[0];
           setProject(p);
@@ -203,73 +217,134 @@ export default function ProjectChatPage() {
                 </p>
               </div>
             ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className="group relative flex items-start gap-3 p-2 rounded-xl hover:bg-[#F7F8F8] transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-full bg-[#082F1B] text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
-                    {msg.author.initials}
-                  </div>
+              messages.map((msg) => {
+                const isAuthor =
+                  (Boolean(msg.author?.id) && Boolean(user?.id) && msg.author.id === user.id) ||
+                  (Boolean(msg.author?.email) && Boolean(user?.email) && msg.author.email.toLowerCase() === user.email.toLowerCase()) ||
+                  (Boolean(msg.author?.name) && Boolean(user?.name) && msg.author.name.trim().toLowerCase() === user.name.trim().toLowerCase());
 
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-[#18251D]">
-                        {msg.author.name}
-                      </span>
-                      <span className="text-[10px] text-[#778079]">
-                        {new Date(msg.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                      {msg.isPinned && (
-                        <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded">
-                          <Pin className="w-3 h-3" /> Pinned
+                const authorId = msg.author?.id?.trim();
+                const authorEmail = msg.author?.email?.trim().toLowerCase();
+                const authorName = msg.author?.name?.trim().toLowerCase();
+
+                const matchedMember: UserProfile | undefined =
+                  (authorId ? memberMap[authorId] : undefined) ||
+                  (authorEmail ? memberMap[authorEmail] : undefined) ||
+                  (authorName ? memberMap[authorName] : undefined);
+
+                const resolvedAvatarUrl = isAuthor
+                  ? (user.avatarUrl || msg.author?.avatarUrl || matchedMember?.avatarUrl)
+                  : (msg.author?.avatarUrl || matchedMember?.avatarUrl);
+
+                const authorWithAvatar: UserProfile = {
+                  ...msg.author,
+                  name: msg.author?.name || matchedMember?.name || (isAuthor ? user.name : 'Team Member'),
+                  avatarUrl: resolvedAvatarUrl,
+                };
+
+                return (
+                  <div
+                    key={msg.id}
+                    className={`group relative flex items-end gap-2.5 my-3 ${
+                      isAuthor ? 'flex-row-reverse' : 'flex-row'
+                    }`}
+                  >
+                    <div className="shrink-0 mb-1">
+                      <UserAvatar
+                        user={authorWithAvatar}
+                        size="sm"
+                        showStatus={false}
+                        className="shadow-2xs ring-2 ring-white"
+                      />
+                    </div>
+
+                    <div
+                      className={`flex flex-col max-w-[85%] sm:max-w-[70%] md:max-w-[60%] ${
+                        isAuthor ? 'items-end' : 'items-start'
+                      }`}
+                    >
+                      {!isAuthor && (
+                        <span className="text-[11px] font-bold text-[#064E24] mb-0.5 ml-1">
+                          {authorWithAvatar.name}
                         </span>
+                      )}
+
+                      <div
+                        className={`relative p-3 rounded-2xl shadow-2xs leading-relaxed text-xs md:text-sm ${
+                          isAuthor
+                            ? 'bg-[#E9FBEA] text-[#18251D] border border-[#BCEEBF] rounded-br-xs'
+                            : 'bg-white text-[#18251D] border border-[#CBD3CE] rounded-bl-xs'
+                        }`}
+                      >
+                        <div className="whitespace-pre-wrap">{msg.body}</div>
+
+                        <div
+                          className={`flex items-center gap-1.5 mt-1 text-[10px] font-mono ${
+                            isAuthor ? 'justify-end text-[#5E6962]' : 'justify-start text-[#778079]'
+                          }`}
+                        >
+                          <span>
+                            {new Date(msg.createdAt).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          {isAuthor && (
+                            <CheckCheck className="w-3.5 h-3.5 text-[#064E24] inline ml-0.5" />
+                          )}
+                          {msg.isPinned && (
+                            <span className="flex items-center gap-0.5 text-amber-700 font-bold bg-amber-50 px-1 rounded">
+                              <Pin className="w-2.5 h-2.5" /> Pinned
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {msg.reactions && msg.reactions.length > 0 && (
+                        <div
+                          className={`flex flex-wrap gap-1 mt-1 ${
+                            isAuthor ? 'justify-end' : 'justify-start'
+                          }`}
+                        >
+                          {msg.reactions.map((r) => {
+                            const hasReacted = r.userIds.includes(user.id);
+                            return (
+                              <button
+                                key={r.emoji}
+                                onClick={() => handleToggleReaction(msg.id, r.emoji)}
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-all ${
+                                  hasReacted
+                                    ? 'bg-[#E9FBEA] border-[#20E34A] text-[#064E24]'
+                                    : 'bg-white border-[#E5E9E6] text-[#5E6962]'
+                                }`}
+                              >
+                                <span>{r.emoji}</span>
+                                <span>{r.count}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
 
-                    <div className="text-xs text-[#18251D] leading-relaxed whitespace-pre-wrap">
-                      {msg.body}
+                    <div
+                      className={`absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-[#CBD3CE] rounded-xl shadow-xs px-1.5 py-1 flex items-center gap-1 z-10 ${
+                        isAuthor ? 'right-[calc(100%+0.5rem)]' : 'left-[calc(100%+0.5rem)]'
+                      }`}
+                    >
+                      {QUICK_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleToggleReaction(msg.id, emoji)}
+                          className="hover:scale-125 transition-transform p-0.5 text-xs"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
                     </div>
-
-                    {msg.reactions && msg.reactions.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pt-1">
-                        {msg.reactions.map((r) => {
-                          const hasReacted = r.userIds.includes(user.id);
-                          return (
-                            <button
-                              key={r.emoji}
-                              onClick={() => handleToggleReaction(msg.id, r.emoji)}
-                              className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold border transition-all ${
-                                hasReacted
-                                  ? 'bg-[#E9FBEA] border-[#20E34A] text-[#064E24]'
-                                  : 'bg-white border-[#E5E9E6] text-[#5E6962]'
-                              }`}
-                            >
-                              <span>{r.emoji}</span>
-                              <span>{r.count}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
-
-                  <div className="absolute right-3 top-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-[#CBD3CE] rounded-xl shadow-xs px-1.5 py-1 flex items-center gap-1">
-                    {QUICK_EMOJIS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        onClick={() => handleToggleReaction(msg.id, emoji)}
-                        className="hover:scale-125 transition-transform p-0.5 text-xs"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
             <div ref={messagesEndRef} />
           </div>
