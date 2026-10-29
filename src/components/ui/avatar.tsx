@@ -84,9 +84,9 @@ export const Avatar: React.FC<AvatarProps> = ({
     <div className={cn('relative inline-flex shrink-0 select-none', className)}>
       <div
         className={cn(
-          'flex items-center justify-center font-bold rounded-full overflow-hidden border border-white/60 shadow-xs',
+          'flex items-center justify-center font-bold rounded-full overflow-hidden border border-white/60 shadow-xs bg-[#06351F] text-[#20E34A]',
           sizeClasses[size],
-          !hasValidImage && getBgColor(name || initials)
+          getBgColor(name || initials)
         )}
       >
         {hasValidImage ? (
@@ -111,7 +111,9 @@ export const Avatar: React.FC<AvatarProps> = ({
               ? 'w-2 h-2'
               : size === 'md'
               ? 'w-2.5 h-2.5'
-              : 'w-3.5 h-3.5',
+              : size === 'lg'
+              ? 'w-3.5 h-3.5'
+              : 'w-5 h-5 ring-4',
             statusColors[status]
           )}
         />
