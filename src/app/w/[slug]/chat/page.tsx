@@ -422,7 +422,7 @@ export default function ChatHubPage() {
       {/* ------------------------------------------------------------------ */}
       {/* Center: Message Stream & Composer */}
       {/* ------------------------------------------------------------------ */}
-      <div className="flex-1 flex flex-col bg-[#F7F8F8] overflow-hidden">
+      <div className="flex-1 flex flex-col bg-[#F7F8F8] overflow-hidden min-w-0">
         {activeChannel ? (
           <>
             {/* Top Channel Header */}
@@ -473,7 +473,7 @@ export default function ChatHubPage() {
             </div>
 
             {/* Message Feed */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 space-y-4">
               {/* Channel Welcome Banner */}
               <div className="p-4 rounded-2xl bg-white border border-[#CBD3CE] shadow-2xs space-y-1 mb-6">
                 <div className="flex items-center gap-2 text-xs font-bold text-[#18251D]">
@@ -513,7 +513,7 @@ export default function ChatHubPage() {
                 return (
                   <div
                     key={msg.id}
-                    className={`group relative flex items-end gap-2.5 my-3 ${
+                    className={`group relative flex items-end gap-2.5 my-3 w-full ${
                       isAuthor ? 'flex-row-reverse' : 'flex-row'
                     }`}
                   >
@@ -529,7 +529,7 @@ export default function ChatHubPage() {
 
                     {/* Message Bubble Column */}
                     <div
-                      className={`flex flex-col max-w-[85%] sm:max-w-[70%] md:max-w-[60%] ${
+                      className={`relative flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[65%] ${
                         isAuthor ? 'items-end' : 'items-start'
                       }`}
                     >
@@ -540,35 +540,55 @@ export default function ChatHubPage() {
                         </span>
                       )}
 
-                      {/* Bubble */}
-                      <div
-                        className={`relative p-3 rounded-2xl shadow-2xs leading-relaxed text-xs md:text-sm ${
-                          isAuthor
-                            ? 'bg-[#E9FBEA] text-[#18251D] border border-[#BCEEBF] rounded-br-xs'
-                            : 'bg-white text-[#18251D] border border-[#CBD3CE] rounded-bl-xs'
-                        }`}
-                      >
-                        <RichMessageRenderer content={msg.body} isCurrentUser={isAuthor} />
-
+                      {/* Bubble with relative positioning for hover action bar */}
+                      <div className="relative group/bubble max-w-full">
                         <div
-                          className={`flex items-center gap-1.5 mt-1 text-[10px] font-mono ${
-                            isAuthor ? 'justify-end text-[#5E6962]' : 'justify-start text-[#778079]'
+                          className={`p-3 rounded-2xl shadow-2xs leading-relaxed text-xs md:text-sm break-words overflow-hidden ${
+                            isAuthor
+                              ? 'bg-[#E9FBEA] text-[#18251D] border border-[#BCEEBF] rounded-br-xs'
+                              : 'bg-white text-[#18251D] border border-[#CBD3CE] rounded-bl-xs'
                           }`}
                         >
-                          <span>
-                            {new Date(msg.createdAt).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                          {isAuthor && (
-                            <CheckCheck className="w-3.5 h-3.5 text-[#064E24] inline ml-0.5" />
-                          )}
-                          {msg.isPinned && (
-                            <span className="flex items-center gap-0.5 text-amber-700 font-bold bg-amber-50 px-1 rounded">
-                              <Pin className="w-2.5 h-2.5" /> Pinned
+                          <RichMessageRenderer content={msg.body} isCurrentUser={isAuthor} />
+
+                          <div
+                            className={`flex items-center gap-1.5 mt-1 text-[10px] font-mono ${
+                              isAuthor ? 'justify-end text-[#5E6962]' : 'justify-start text-[#778079]'
+                            }`}
+                          >
+                            <span>
+                              {new Date(msg.createdAt).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
                             </span>
-                          )}
+                            {isAuthor && (
+                              <CheckCheck className="w-3.5 h-3.5 text-[#064E24] inline ml-0.5" />
+                            )}
+                            {msg.isPinned && (
+                              <span className="flex items-center gap-0.5 text-amber-700 font-bold bg-amber-50 px-1 rounded">
+                                <Pin className="w-2.5 h-2.5" /> Pinned
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Hover Reaction Action Toolbar - Floating cleanly on top edge of bubble */}
+                        <div
+                          className={`absolute -top-3.5 opacity-0 group-hover/bubble:opacity-100 group-hover:opacity-100 transition-opacity bg-white border border-[#CBD3CE] rounded-full shadow-md px-2 py-0.5 flex items-center gap-1 z-20 pointer-events-none group-hover/bubble:pointer-events-auto group-hover:pointer-events-auto ${
+                            isAuthor ? 'right-2' : 'left-2'
+                          }`}
+                        >
+                          {QUICK_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => handleToggleReaction(msg.id, emoji)}
+                              className="hover:scale-125 transition-transform p-0.5 text-xs"
+                              title={`React ${emoji}`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
                         </div>
                       </div>
 
@@ -598,24 +618,6 @@ export default function ChatHubPage() {
                           })}
                         </div>
                       )}
-                    </div>
-
-                    {/* Hover Reaction Action Toolbar */}
-                    <div
-                      className={`absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-[#CBD3CE] rounded-xl shadow-xs px-1.5 py-1 flex items-center gap-1 z-10 ${
-                        isAuthor ? 'right-[calc(100%+0.5rem)]' : 'left-[calc(100%+0.5rem)]'
-                      }`}
-                    >
-                      {QUICK_EMOJIS.map((emoji) => (
-                        <button
-                          key={emoji}
-                          onClick={() => handleToggleReaction(msg.id, emoji)}
-                          className="hover:scale-125 transition-transform p-0.5 text-xs"
-                          title={`React ${emoji}`}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
                     </div>
                   </div>
                 );
