@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { UserProfile, Workspace, WorkspaceRole } from '@/lib/types';
@@ -27,6 +27,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const params = useParams();
   const router = useRouter();
   const slug = (params?.slug as string) || '';
+  const fetchIdRef = useRef(0); // prevents stale async updates
 
   const [user, setUser] = useState<UserProfile>({
     id: '',
@@ -52,11 +53,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
 
   const fetchWorkspaceData = useCallback(async () => {
+    // Track current fetch to discard stale results
+    const currentFetchId = ++fetchIdRef.current;
+
     try {
       const supabase = createClient();
       const {
         data: { user: authUser },
       } = await supabase.auth.getUser();
+
+      if (currentFetchId !== fetchIdRef.current) return;
 
       if (!authUser) {
         // Unauthenticated visitor
@@ -72,14 +78,30 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return;
       }
 
-      // 1. Fetch user profile from public.profiles
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .maybeSingle();
+      // ─── Run all independent queries in PARALLEL ───────────────────────────
+      const [profileResult, activeWsResult, userWsListResult] = await Promise.all([
+        // 1. Fetch user profile
+        supabase.from('profiles').select('*').eq('id', authUser.id).maybeSingle(),
+        // 2. Fetch active workspace by slug
+        supabase.from('workspaces').select('*').eq('slug', slug).maybeSingle(),
+        // 3. Fetch all user workspaces for switcher
+        supabase
+          .from('workspace_members')
+          .select('role, workspaces(id, name, slug)')
+          .eq('user_id', authUser.id),
+      ]);
 
-      const fullName = profile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Member';
+      if (currentFetchId !== fetchIdRef.current) return;
+
+      const profile = profileResult.data;
+      const activeWs = activeWsResult.data;
+
+      // Build user profile
+      const fullName =
+        profile?.full_name ||
+        authUser.user_metadata?.full_name ||
+        authUser.email?.split('@')[0] ||
+        'Member';
       const initials = fullName
         .split(' ')
         .map((n: string) => n[0])
@@ -87,43 +109,21 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         .slice(0, 2)
         .toUpperCase();
 
-      // 2. Fetch active workspace directly by slug
-      const { data: activeWs } = await supabase
-        .from('workspaces')
-        .select('*')
-        .eq('slug', slug)
-        .maybeSingle();
+      const resolvedUser: UserProfile = {
+        id: authUser.id,
+        name: fullName,
+        email: authUser.email || '',
+        avatarUrl: profile?.avatar_url || undefined,
+        initials: initials || 'ME',
+        role: 'Workspace Member',
+        status: 'online',
+      };
+      setUser(resolvedUser);
 
-      // 3. Fetch user's membership for active workspace
-      let activeRole: WorkspaceRole = 'member';
-      let activeJobTitle = 'Workspace Member';
-
-      if (activeWs) {
-        const { data: memberRecord } = await supabase
-          .from('workspace_members')
-          .select('role, job_title')
-          .eq('workspace_id', activeWs.id)
-          .eq('user_id', authUser.id)
-          .maybeSingle();
-
-        if (memberRecord) {
-          activeRole = memberRecord.role as WorkspaceRole;
-          activeJobTitle = memberRecord.job_title || (activeRole === 'owner' ? 'Workspace Owner' : 'Member');
-        } else if (activeWs.owner_id === authUser.id) {
-          activeRole = 'owner';
-          activeJobTitle = 'Workspace Owner';
-        }
-      }
-
-      // 4. Fetch all user workspaces for switcher
-      const { data: userWsList } = await supabase
-        .from('workspace_members')
-        .select('role, workspaces(id, name, slug)')
-        .eq('user_id', authUser.id);
-
+      // Parse user workspace list
       const parsedWorkspaces: { id: string; name: string; slug: string; role: WorkspaceRole }[] = [];
-      if (userWsList) {
-        userWsList.forEach((uw: any) => {
+      if (userWsListResult.data) {
+        userWsListResult.data.forEach((uw: any) => {
           const w = Array.isArray(uw.workspaces) ? uw.workspaces[0] : uw.workspaces;
           if (w) {
             parsedWorkspaces.push({
@@ -137,34 +137,47 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       setUserWorkspaces(parsedWorkspaces);
 
-      const resolvedUser: UserProfile = {
-        id: authUser.id,
-        name: fullName,
-        email: authUser.email || '',
-        avatarUrl: profile?.avatar_url || undefined,
-        initials: initials || 'ME',
-        role: activeJobTitle,
-        status: 'online',
-      };
-      setUser(resolvedUser);
-
-      // 5. Set active workspace state
       if (activeWs) {
-        setIsDemoMode(false);
+        // ─── Run remaining queries for the active workspace IN PARALLEL ───────
+        const [memberRecordResult, projectCountResult] = await Promise.all([
+          supabase
+            .from('workspace_members')
+            .select('role, job_title')
+            .eq('workspace_id', activeWs.id)
+            .eq('user_id', authUser.id)
+            .maybeSingle(),
+          supabase
+            .from('projects')
+            .select('*', { count: 'exact', head: true })
+            .eq('workspace_id', activeWs.id),
+        ]);
+
+        if (currentFetchId !== fetchIdRef.current) return;
+
+        let activeRole: WorkspaceRole = 'member';
+        let activeJobTitle = 'Workspace Member';
+
+        if (memberRecordResult.data) {
+          activeRole = memberRecordResult.data.role as WorkspaceRole;
+          activeJobTitle =
+            memberRecordResult.data.job_title ||
+            (activeRole === 'owner' ? 'Workspace Owner' : 'Member');
+        } else if (activeWs.owner_id === authUser.id) {
+          activeRole = 'owner';
+          activeJobTitle = 'Workspace Owner';
+        }
+
+        // Update user with correct job title
+        setUser((prev) => ({ ...prev, role: activeJobTitle }));
         setRole(activeRole);
-
-        const { count: realProjectCount } = await supabase
-          .from('projects')
-          .select('*', { count: 'exact', head: true })
-          .eq('workspace_id', activeWs.id);
-
+        setIsDemoMode(false);
         setWorkspace({
           id: activeWs.id,
           name: activeWs.name,
           slug: activeWs.slug,
           ownerId: activeWs.owner_id,
           membersCount: parsedWorkspaces.length || 1,
-          projectsCount: realProjectCount || 0,
+          projectsCount: projectCountResult.count || 0,
         });
       } else if (slug === 'factor-labs') {
         // Fallback to sample demo if viewing factor-labs
@@ -186,6 +199,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [slug, router]);
 
   useEffect(() => {
+    setLoading(true);
     fetchWorkspaceData();
   }, [fetchWorkspaceData]);
 
@@ -256,4 +270,3 @@ export const useWorkspace = () => {
   }
   return context;
 };
-
