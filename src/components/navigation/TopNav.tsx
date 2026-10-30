@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
-import { sampleProjects } from '@/lib/mockData';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface TopNavProps {
@@ -55,11 +54,9 @@ export const TopNav: React.FC<TopNavProps> = ({
     ];
 
     if (parts.includes('projects') && parts.length >= 4) {
-      const projectId = parts[3];
-      const project = sampleProjects.find((p) => p.id === projectId);
       crumbs.push({
-        label: project ? project.name : 'Project',
-        href: `/w/${workspace.slug}/projects/${projectId}`,
+        label: 'Project',
+        href: `/w/${workspace.slug}/projects/${parts[3]}`,
       });
     } else if (parts.includes('inbox')) {
       crumbs.push({ label: 'Inbox', href: `/w/${workspace.slug}/inbox` });

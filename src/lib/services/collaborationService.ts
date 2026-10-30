@@ -7,13 +7,6 @@ import {
   ChannelType,
   UserProfile,
 } from '@/lib/types';
-import {
-  sampleUsers,
-  sampleChannels,
-  sampleChatMessages,
-  sampleTaskComments,
-  sampleNotifications,
-} from '@/lib/mockData';
 
 // Helper to format profile
 function parseProfile(raw: any, fallbackId?: string): UserProfile {
@@ -43,9 +36,7 @@ function parseProfile(raw: any, fallbackId?: string): UserProfile {
 // ------------------------------------------------------------------------------
 
 export async function getWorkspaceChannels(workspaceId: string): Promise<Channel[]> {
-  if (!workspaceId || workspaceId.startsWith('ws-')) {
-    return sampleChannels;
-  }
+  if (!workspaceId) return [];
 
   const supabase = createClient();
 
@@ -61,7 +52,7 @@ export async function getWorkspaceChannels(workspaceId: string): Promise<Channel
       .order('created_at', { ascending: true });
 
     if (error || !data || data.length === 0) {
-      return sampleChannels;
+      return [];
     }
 
     return data.map((c: any) => ({
@@ -79,18 +70,12 @@ export async function getWorkspaceChannels(workspaceId: string): Promise<Channel
     }));
   } catch (err) {
     console.warn('Failed to fetch channels:', err);
-    return sampleChannels;
+    return [];
   }
 }
 
 export async function getProjectChannel(projectId: string): Promise<Channel | null> {
-  if (!projectId || projectId.startsWith('proj-')) {
-    return (
-      sampleChannels.find((c) => c.projectId === projectId) ||
-      sampleChannels[2] ||
-      null
-    );
-  }
+  if (!projectId) return null;
 
   const supabase = createClient();
 
@@ -238,9 +223,7 @@ export async function createChannel(input: {
 // ------------------------------------------------------------------------------
 
 export async function getChannelMessages(channelId: string): Promise<ChatMessage[]> {
-  if (!channelId || channelId.startsWith('chan-')) {
-    return sampleChatMessages[channelId] || sampleChatMessages['chan-general'] || [];
-  }
+  if (!channelId) return [];
 
   const supabase = createClient();
 
@@ -260,7 +243,7 @@ export async function getChannelMessages(channelId: string): Promise<ChatMessage
       .order('created_at', { ascending: true });
 
     if (error || !data || data.length === 0) {
-      return sampleChatMessages[channelId] || [];
+      return [];
     }
 
     return data.map((m: any) => {
@@ -294,7 +277,7 @@ export async function getChannelMessages(channelId: string): Promise<ChatMessage
       };
     });
   } catch {
-    return sampleChatMessages[channelId] || [];
+    return [];
   }
 }
 
@@ -310,19 +293,6 @@ export async function sendChatMessage(input: {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    if (input.channelId.startsWith('chan-') || input.channelId.startsWith('demo-')) {
-      return {
-        id: `msg-${Date.now()}`,
-        channelId: input.channelId,
-        author: sampleUsers[0],
-        body: input.body.trim(),
-        attachments: input.attachments || [],
-        isPinned: false,
-        isEdited: false,
-        createdAt: new Date().toISOString(),
-        reactions: [],
-      };
-    }
     throw new Error('Authentication required to send message.');
   }
 
@@ -413,9 +383,7 @@ export async function toggleMessageReaction(messageId: string, emoji: string): P
 // ------------------------------------------------------------------------------
 
 export async function getTaskComments(taskId: string): Promise<TaskComment[]> {
-  if (!taskId || taskId.startsWith('task-')) {
-    return sampleTaskComments[taskId] || [];
-  }
+  if (!taskId) return [];
 
   const supabase = createClient();
 
@@ -430,7 +398,7 @@ export async function getTaskComments(taskId: string): Promise<TaskComment[]> {
       .order('created_at', { ascending: true });
 
     if (error || !data || data.length === 0) {
-      return sampleTaskComments[taskId] || [];
+      return [];
     }
 
     return data.map((c: any) => ({
@@ -444,7 +412,7 @@ export async function getTaskComments(taskId: string): Promise<TaskComment[]> {
       createdAt: c.created_at,
     }));
   } catch {
-    return sampleTaskComments[taskId] || [];
+    return [];
   }
 }
 
@@ -514,7 +482,7 @@ export async function getNotifications(workspaceId?: string): Promise<AppNotific
 
   if (error || !data) {
     console.warn('Error fetching notifications:', error?.message);
-    return sampleNotifications;
+    return [];
   }
 
   if (data.length === 0) {
@@ -724,14 +692,7 @@ export async function getChannelMembers(
   channelId: string,
   workspaceId: string
 ): Promise<ChannelMemberInfo[]> {
-  if (channelId.startsWith('chan-') || !workspaceId || workspaceId.startsWith('ws-')) {
-    return sampleUsers.map((u, i) => ({
-      user: u,
-      channelRole: (i === 0 ? 'admin' : i === 1 ? 'moderator' : 'member') as any,
-      isBlocked: false,
-      isRemoved: false,
-    }));
-  }
+  if (!channelId || !workspaceId) return [];
 
   const supabase = createClient();
 

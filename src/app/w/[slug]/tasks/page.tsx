@@ -21,10 +21,9 @@ import { Task, ProjectSummary, TaskStatus, TaskPriority } from '@/lib/types';
 import { getWorkspaceProjects } from '@/lib/services/projectService';
 import { getProjectTasks, updateTaskStatus } from '@/lib/services/taskService';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { sampleTasks } from '@/lib/mockData';
 
 export default function AllTasksPage() {
-  const { workspace, isDemoMode } = useWorkspace();
+  const { workspace } = useWorkspace();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -36,15 +35,11 @@ export default function AllTasksPage() {
   const loadData = async () => {
     if (!workspace.id) return;
     try {
-      if (isDemoMode) {
-        setTasks(sampleTasks);
-      } else {
-        const projs = await getWorkspaceProjects(workspace.id);
-        setProjects(projs);
-        const taskPromises = projs.map((p) => getProjectTasks(p.id));
-        const allTasks = (await Promise.all(taskPromises)).flat();
-        setTasks(allTasks);
-      }
+      const projs = await getWorkspaceProjects(workspace.id);
+      setProjects(projs);
+      const taskPromises = projs.map((p) => getProjectTasks(p.id));
+      const allTasks = (await Promise.all(taskPromises)).flat();
+      setTasks(allTasks);
     } catch (err) {
       console.error(err);
     } finally {
@@ -54,7 +49,7 @@ export default function AllTasksPage() {
 
   useEffect(() => {
     loadData();
-  }, [workspace.id, isDemoMode]);
+  }, [workspace.id]);
 
   const handleToggleTask = async (e: React.MouseEvent, task: Task) => {
     e.stopPropagation();

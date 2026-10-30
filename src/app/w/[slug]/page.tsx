@@ -33,14 +33,6 @@ import {
   TeamMemberWorkload,
   ActivityItem,
 } from '@/lib/types';
-import {
-  sampleProjects,
-  executiveKpis as demoKpis,
-  sampleTasks,
-  sampleReviewRequests,
-  teamWorkloadData,
-  recentActivityFeed,
-} from '@/lib/mockData';
 
 export default function OwnerDashboardPage() {
   const { user, workspace, isOwner, isDemoMode } = useWorkspace();
@@ -55,21 +47,6 @@ export default function OwnerDashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const loadDashboardData = async () => {
-    if (isDemoMode) {
-      setRealProjects(sampleProjects);
-      setBlockedTasks(sampleTasks.filter((t) => t.isBlocked));
-      setOverdueTasks(
-        sampleTasks.filter(
-          (t) => t.dueDate && new Date(t.dueDate) < new Date('2026-10-29') && t.status !== 'completed'
-        )
-      );
-      setReviewRequests(sampleReviewRequests);
-      setWorkloadData(teamWorkloadData);
-      setActivityData(recentActivityFeed);
-      setLoading(false);
-      return;
-    }
-
     if (workspace.id) {
       try {
         const supabase = createClient();
@@ -207,7 +184,7 @@ export default function OwnerDashboardPage() {
 
   useEffect(() => {
     loadDashboardData();
-  }, [workspace.id, isDemoMode]);
+  }, [workspace.id]);
 
   // Compute dynamic KPIs if real projects exist
   const activeProjectsCount = realProjects.length;
@@ -216,17 +193,20 @@ export default function OwnerDashboardPage() {
   const overdueTasksCount = overdueTasks.length;
   const pendingReviewsCount = reviewRequests.length;
 
-  const dynamicKpis = isDemoMode
-    ? demoKpis
-    : {
-        activeProjects: activeProjectsCount,
-        totalTasks: totalTasksCount,
-        completedTasks: completedTasksCount,
-        overdueTasks: overdueTasksCount,
-        pendingApprovals: pendingReviewsCount,
-        overallVelocity: completedTasksCount > 0 ? 12 : 0,
-        weeklyProgressTrend: demoKpis.weeklyProgressTrend,
-      };
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dynamicKpis = {
+    activeProjects: activeProjectsCount,
+    totalTasks: totalTasksCount,
+    completedTasks: completedTasksCount,
+    overdueTasks: overdueTasksCount,
+    pendingApprovals: pendingReviewsCount,
+    overallVelocity: completedTasksCount > 0 ? completedTasksCount : 0,
+    weeklyProgressTrend: days.map((day) => ({
+      day,
+      completed: completedTasksCount > 0 ? Math.ceil(completedTasksCount / 7) : 0,
+      created: totalTasksCount > 0 ? Math.ceil(totalTasksCount / 7) : 0,
+    })),
+  };
 
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
@@ -289,7 +269,7 @@ export default function OwnerDashboardPage() {
       </div>
 
       {/* Zero State for New Real Workspaces with 0 Projects */}
-      {!isDemoMode && realProjects.length === 0 && (
+      {realProjects.length === 0 && (
         <div className="bg-white rounded-2xl border border-[#CBD3CE] p-8 shadow-card text-center space-y-4">
           <div className="w-14 h-14 rounded-2xl bg-[#E9FBEA] text-[#064E24] flex items-center justify-center mx-auto border border-[#C6F5CB]">
             <FolderKanban className="w-7 h-7 text-[#20E34A]" />

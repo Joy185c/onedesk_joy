@@ -10,7 +10,6 @@ import {
   GoalStatus,
   TaskPriority,
 } from '@/lib/types';
-import { sampleUsers } from '@/lib/mockData';
 
 function parseProfile(raw: any): UserProfile {
   const name = raw?.full_name || raw?.email?.split('@')[0] || 'Team Member';
@@ -59,55 +58,7 @@ export async function getDocuments(
   const { data, error } = await query;
 
   if (error || !data || data.length === 0) {
-    return [
-      {
-        id: 'doc-playbook',
-        workspaceId,
-        projectId,
-        title: 'OneDesk Architecture & Engineering Playbook',
-        icon: '📘',
-        content: `# OneDesk Architecture & Engineering Playbook
-
-Welcome to the central product and technical knowledge base.
-
-## Visual Design Reference
-- Obsidian Forest: \`#082F1B\`
-- Electric Lime: \`#20E34A\`
-- Canvas Background: \`#F0F1F3\`
-- Card Corners: \`rounded-2xl\` (16px)
-
-## Engineering Guidelines
-1. Strict TypeScript mode with zero avoidable \`any\` types.
-2. Row Level Security must be enforced on every Postgres table.
-3. Deliverables are partitioned by workspace and project boundary.
-`,
-        isPublished: true,
-        author: sampleUsers[0],
-        createdAt: '2026-10-28T08:00:00Z',
-        updatedAt: '2026-10-28T12:00:00Z',
-      },
-      {
-        id: 'doc-sprint-charter',
-        workspaceId,
-        projectId,
-        title: 'Q4 Product Roadmap & Sprint Milestones',
-        icon: '🎯',
-        content: `# Q4 Product Roadmap & Sprint Milestones
-
-## Overview
-This roadmap establishes sprint commitments for multi-tenant delivery, real-time collaboration, and productivity dashboards.
-
-### Focus Areas
-- Real-time channel and direct message streams
-- Multi-project unified calendar and schedule view
-- Developer stopwatch timer and manual timesheets
-`,
-        isPublished: true,
-        author: sampleUsers[1],
-        createdAt: '2026-10-27T10:00:00Z',
-        updatedAt: '2026-10-28T09:30:00Z',
-      },
-    ];
+    return [];
   }
 
   return data.map((d: any) => ({
@@ -214,80 +165,7 @@ export async function getGoals(workspaceId: string, projectId?: string): Promise
   const { data, error } = await query;
 
   if (error || !data || data.length === 0) {
-    return [
-      {
-        id: 'goal-1',
-        workspaceId,
-        title: 'Q4 Core Platform Delivery & QA Sign-Off',
-        description:
-          'Ensure complete multi-tenant tenant isolation, project task engines, and review approval gates.',
-        status: 'on_track',
-        progressPercent: 75,
-        targetDate: '2026-11-15',
-        owner: sampleUsers[0],
-        keyResults: [
-          {
-            id: 'kr-1',
-            goalId: 'goal-1',
-            title: 'Complete multi-tenant auth and RLS unit test suite',
-            initialValue: 0,
-            currentValue: 100,
-            targetValue: 100,
-            unit: '%',
-          },
-          {
-            id: 'kr-2',
-            goalId: 'goal-1',
-            title: 'Deliver Kanban, List, and Table view parity',
-            initialValue: 0,
-            currentValue: 100,
-            targetValue: 100,
-            unit: '%',
-          },
-          {
-            id: 'kr-3',
-            goalId: 'goal-1',
-            title: 'Close client QA demo tickets without critical blockers',
-            initialValue: 0,
-            currentValue: 24,
-            targetValue: 30,
-            unit: 'tickets',
-          },
-        ],
-        createdAt: '2026-10-20T00:00:00Z',
-      },
-      {
-        id: 'goal-2',
-        workspaceId,
-        title: 'Realtime Collaboration & Instant Chat Sync',
-        description: 'Provide sub-100ms message delivery across project channels and threaded task reviews.',
-        status: 'on_track',
-        progressPercent: 60,
-        targetDate: '2026-11-30',
-        owner: sampleUsers[2],
-        keyResults: [
-          {
-            id: 'kr-4',
-            goalId: 'goal-2',
-            title: 'WebSocket broadcast latency under 150ms',
-            initialValue: 0,
-            currentValue: 85,
-            targetValue: 100,
-            unit: '%',
-          },
-          {
-            id: 'kr-5',
-            goalId: 'goal-2',
-            title: 'Zero cross-tenant message leakage in penetration testing',
-            initialValue: 0,
-            currentValue: 100,
-            targetValue: 100,
-            unit: '%',
-          },
-        ],
-        createdAt: '2026-10-22T00:00:00Z',
-      },
-    ];
+    return [];
   }
 
   return data.map((g: any) => ({
@@ -443,50 +321,7 @@ export async function getTimeEntries(
   const { data, error } = await query;
 
   if (error || !data || data.length === 0) {
-    return [
-      {
-        id: 'te-1',
-        workspaceId,
-        projectId: 'proj-mobile-app',
-        projectName: 'Mobile Banking App',
-        projectKey: 'MOB',
-        taskId: 'task-mob-1',
-        taskTitle: 'Biometric face unlock & fallback PIN handshake',
-        taskNumber: 104,
-        user: sampleUsers[3],
-        durationMinutes: 180, // 3.0h
-        description: 'Completed local cryptography storage and Keychain integration.',
-        entryDate: new Date().toISOString().split('T')[0],
-        createdAt: '2026-10-28T14:00:00Z',
-      },
-      {
-        id: 'te-2',
-        workspaceId,
-        projectId: 'proj-real-estate',
-        projectName: 'Real Estate Platform',
-        projectKey: 'RES',
-        taskId: 'task-res-1',
-        taskTitle: 'Interactive map search with boundary filtering',
-        taskNumber: 101,
-        user: sampleUsers[2],
-        durationMinutes: 240, // 4.0h
-        description: 'Optimized turf.js boundary intersection queries.',
-        entryDate: new Date().toISOString().split('T')[0],
-        createdAt: '2026-10-28T11:30:00Z',
-      },
-      {
-        id: 'te-3',
-        workspaceId,
-        projectId: 'proj-brand-identity',
-        projectName: 'Brand Identity & Guidelines',
-        projectKey: 'BRD',
-        user: sampleUsers[1],
-        durationMinutes: 120, // 2.0h
-        description: 'Exported SVG tokens and responsive typography matrix.',
-        entryDate: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-        createdAt: '2026-10-27T16:00:00Z',
-      },
-    ];
+    return [];
   }
 
   return data.map((t: any) => ({
@@ -650,50 +485,7 @@ export async function getCalendarEvents(workspaceId: string): Promise<CalendarEv
     console.warn('Failed to aggregate calendar events:', err);
   }
 
-  // Fallback demo events if none in DB
-  if (events.length === 0) {
-    const today = new Date();
-    const fmt = (d: Date) => d.toISOString().split('T')[0];
-
-    return [
-      {
-        id: 'demo-1',
-        title: '[RES-101] Map search boundary filter release',
-        date: fmt(new Date(today.getTime() + 86400000 * 2)),
-        type: 'task',
-        priority: 'high',
-        projectKey: 'RES',
-        projectName: 'Real Estate Platform',
-        status: 'in_progress',
-      },
-      {
-        id: 'demo-2',
-        title: '[MOB-104] Face unlock & fallback PIN handshake',
-        date: fmt(new Date(today.getTime() + 86400000 * 5)),
-        type: 'task',
-        priority: 'urgent',
-        projectKey: 'MOB',
-        projectName: 'Mobile Banking App',
-        status: 'ready_for_review',
-      },
-      {
-        id: 'demo-3',
-        title: '🏁 Real Estate Platform Phase 2 Milestone',
-        date: fmt(new Date(today.getTime() + 86400000 * 10)),
-        type: 'milestone',
-        projectKey: 'RES',
-        projectName: 'Real Estate Platform',
-      },
-      {
-        id: 'demo-4',
-        title: '🎯 Q4 SaaS Release Readiness OKR',
-        date: fmt(new Date(today.getTime() + 86400000 * 18)),
-        type: 'goal',
-        status: 'on_track',
-      },
-    ];
-  }
-
+  // Return empty if no real data
   return events;
 }
 

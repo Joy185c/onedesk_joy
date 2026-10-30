@@ -18,10 +18,9 @@ import { Task, TaskPriority, TaskStatus } from '@/lib/types';
 import { getWorkspaceProjects } from '@/lib/services/projectService';
 import { getProjectTasks, updateTaskStatus } from '@/lib/services/taskService';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { sampleTasks } from '@/lib/mockData';
 
 export default function MyTasksPage() {
-  const { workspace, user, isAdminOrOwner, isDemoMode } = useWorkspace();
+  const { workspace, user, isAdminOrOwner } = useWorkspace();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filterTab, setFilterTab] = useState<'all' | 'today' | 'overdue' | 'review' | 'completed'>('all');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -30,26 +29,22 @@ export default function MyTasksPage() {
   const loadData = async () => {
     if (!workspace.id) return;
     try {
-      if (isDemoMode) {
-        setTasks(sampleTasks);
+      const projs = await getWorkspaceProjects(workspace.id);
+      const taskPromises = projs.map((p) => getProjectTasks(p.id));
+      const allProjectTasks = (await Promise.all(taskPromises)).flat();
+
+      // Assignment-based visibility: Filter deliverables assigned to current user
+      const userAssigned = allProjectTasks.filter((t) =>
+        t.assignees.some((a) => a.id === user.id)
+      );
+
+      if (userAssigned.length > 0) {
+        setTasks(userAssigned);
+      } else if (isAdminOrOwner) {
+        // Workspace Owners/Admins see active deliverables across projects
+        setTasks(allProjectTasks);
       } else {
-        const projs = await getWorkspaceProjects(workspace.id);
-        const taskPromises = projs.map((p) => getProjectTasks(p.id));
-        const allProjectTasks = (await Promise.all(taskPromises)).flat();
-
-        // Assignment-based visibility: Filter deliverables assigned to current user
-        const userAssigned = allProjectTasks.filter((t) =>
-          t.assignees.some((a) => a.id === user.id)
-        );
-
-        if (userAssigned.length > 0) {
-          setTasks(userAssigned);
-        } else if (isAdminOrOwner) {
-          // Workspace Owners/Admins see active deliverables across projects
-          setTasks(allProjectTasks);
-        } else {
-          setTasks([]);
-        }
+        setTasks([]);
       }
     } catch (err) {
       console.error(err);
@@ -60,7 +55,7 @@ export default function MyTasksPage() {
 
   useEffect(() => {
     loadData();
-  }, [workspace.id, user.id, isDemoMode]);
+  }, [workspace.id, user.id]);
 
   const handleToggleComplete = async (e: React.MouseEvent, task: Task) => {
     e.stopPropagation();

@@ -5,7 +5,6 @@ import { useParams } from 'next/navigation';
 import { ProjectHeader } from '@/components/project/ProjectHeader';
 import { CreateTaskModal } from '@/components/task/CreateTaskModal';
 import { DocumentItem, ProjectSummary } from '@/lib/types';
-import { sampleProjects } from '@/lib/mockData';
 import { getProjectById } from '@/lib/services/projectService';
 import {
   getDocuments,
@@ -30,7 +29,7 @@ import { Input } from '@/components/ui/input';
 export default function ProjectDocsPage() {
   const params = useParams();
   const projectId = params?.id as string;
-  const { workspace, user, isDemoMode } = useWorkspace();
+  const { workspace, user } = useWorkspace();
 
   const [project, setProject] = useState<ProjectSummary | null>(null);
   const [docs, setDocs] = useState<DocumentItem[]>([]);
@@ -45,34 +44,29 @@ export default function ProjectDocsPage() {
   useEffect(() => {
     async function load() {
       try {
-        if (isDemoMode || projectId.startsWith('prj-') || projectId.startsWith('proj-')) {
-          const p = sampleProjects.find((sp) => sp.id === projectId) || sampleProjects[0];
-          setProject(p);
-        } else {
-          const rawProj = await getProjectById(projectId);
-          if (rawProj) {
-            setProject({
-              id: rawProj.id,
-              key: rawProj.key,
-              name: rawProj.name,
-              spaceId: rawProj.space_id || 'sp-general',
-              health: rawProj.health || 'on_track',
-              progressPercent: 50,
-              totalTasks: 0,
-              completedTasks: 0,
-              overdueTasks: 0,
-              pendingReviews: 0,
-              targetDate: rawProj.target_date || 'Ongoing',
-              members: [],
-              lead: {
-                id: rawProj.lead?.id || rawProj.owner?.id || '',
-                name: rawProj.lead?.full_name || rawProj.owner?.full_name || 'Lead',
-                email: rawProj.lead?.email || '',
-                initials: 'PL',
-                role: 'Lead',
-              },
-            });
-          }
+        const rawProj = await getProjectById(projectId);
+        if (rawProj) {
+          setProject({
+            id: rawProj.id,
+            key: rawProj.key,
+            name: rawProj.name,
+            spaceId: rawProj.space_id || 'sp-general',
+            health: rawProj.health || 'on_track',
+            progressPercent: 50,
+            totalTasks: 0,
+            completedTasks: 0,
+            overdueTasks: 0,
+            pendingReviews: 0,
+            targetDate: rawProj.target_date || 'Ongoing',
+            members: [],
+            lead: {
+              id: rawProj.lead?.id || rawProj.owner?.id || '',
+              name: rawProj.lead?.full_name || rawProj.owner?.full_name || 'Lead',
+              email: rawProj.lead?.email || '',
+              initials: 'PL',
+              role: 'Lead',
+            },
+          });
         }
 
         const projectDocs = await getDocuments(workspace.id, projectId);
@@ -89,7 +83,7 @@ export default function ProjectDocsPage() {
       }
     }
     load();
-  }, [projectId, workspace.id, isDemoMode]);
+  }, [projectId, workspace.id]);
 
   const selectDoc = (d: DocumentItem) => {
     setSelectedDoc(d);

@@ -6,7 +6,6 @@ import { ProjectHeader } from '@/components/project/ProjectHeader';
 import { ProjectOverviewView } from '@/components/project/ProjectOverviewView';
 import { CreateTaskModal } from '@/components/task/CreateTaskModal';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer';
-import { sampleProjects, sampleTasks } from '@/lib/mockData';
 import { ProjectSummary, Task, ProjectHealth } from '@/lib/types';
 import { getProjectById } from '@/lib/services/projectService';
 import { getProjectTasks } from '@/lib/services/taskService';
@@ -17,7 +16,7 @@ import Link from 'next/link';
 export default function ProjectOverviewPage() {
   const params = useParams();
   const projectId = params?.id as string;
-  const { workspace, isDemoMode } = useWorkspace();
+  const { workspace } = useWorkspace();
 
   const [project, setProject] = useState<ProjectSummary | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -27,20 +26,15 @@ export default function ProjectOverviewPage() {
 
   const loadData = async () => {
     try {
-      if (isDemoMode || projectId.startsWith('prj-')) {
-        const p = sampleProjects.find((sp) => sp.id === projectId) || sampleProjects[0];
-        setProject(p);
-        setTasks(sampleTasks.filter((st) => st.projectId === p.id));
-      } else {
-        const rawProj = await getProjectById(projectId);
-        if (!rawProj) {
-          setProject(null);
-          setLoading(false);
-          return;
-        }
-        const rawTasks = await getProjectTasks(projectId);
+      const rawProj = await getProjectById(projectId);
+      if (!rawProj) {
+        setProject(null);
+        setLoading(false);
+        return;
+      }
+      const rawTasks = await getProjectTasks(projectId);
 
-        const summary: ProjectSummary = {
+      const summary: ProjectSummary = {
           id: rawProj.id,
           key: rawProj.key,
           name: rawProj.name,
@@ -107,9 +101,8 @@ export default function ProjectOverviewPage() {
           },
         };
 
-        setProject(summary);
-        setTasks(rawTasks);
-      }
+      setProject(summary);
+      setTasks(rawTasks);
     } catch (err) {
       console.error('Failed to load project:', err);
     } finally {
@@ -119,7 +112,7 @@ export default function ProjectOverviewPage() {
 
   useEffect(() => {
     loadData();
-  }, [projectId, isDemoMode]);
+  }, [projectId]);
 
   if (loading) {
     return (

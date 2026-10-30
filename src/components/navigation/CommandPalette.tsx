@@ -88,42 +88,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       setIsSearching(true);
 
       try {
-        if (isDemoMode) {
-          // For demo mode: import and use mockData synchronously
-          const { sampleProjects, sampleTasks } = await import('@/lib/mockData');
-          const q = searchQuery.toLowerCase();
-          setProjects(
-            sampleProjects
-              .filter((p) => p.name.toLowerCase().includes(q) || p.key.toLowerCase().includes(q))
-              .slice(0, 5)
-              .map((p) => ({
-                id: p.id,
-                key: p.key,
-                name: p.name,
-                completedTasks: p.completedTasks,
-                totalTasks: p.totalTasks,
-              }))
-          );
-          setTasks(
-            sampleTasks
-              .filter(
-                (t) =>
-                  t.title.toLowerCase().includes(q) ||
-                  `${t.projectKey}-${t.taskNumber}`.toLowerCase().includes(q)
-              )
-              .slice(0, 8)
-              .map((t) => ({
-                id: t.id,
-                taskNumber: t.taskNumber,
-                title: t.title,
-                status: t.status,
-                projectId: t.projectId,
-                projectKey: t.projectKey,
-              }))
-          );
-          return;
-        }
-
         const supabase = createClient();
         const q = `%${searchQuery}%`;
 
@@ -172,7 +136,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         setIsSearching(false);
       }
     },
-    [workspace.id, isDemoMode]
+    [workspace.id]
   );
 
   // Debounce input changes

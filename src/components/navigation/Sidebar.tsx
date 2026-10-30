@@ -28,7 +28,6 @@ import {
 import { Logo } from '@/components/branding/Logo';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { Avatar } from '@/components/ui/avatar';
-import { sampleSpaces } from '@/lib/mockData';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { getWorkspaceProjects } from '@/lib/services/projectService';
 import { ProjectSummary } from '@/lib/types';
@@ -80,12 +79,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     loadSidebarProjects();
   }, [workspace.id, isDemoMode, slug]);
 
-  // Space expansion state
-  const [expandedSpaces, setExpandedSpaces] = useState<Record<string, boolean>>({
-    'sp-client-delivery': true,
-    'sp-design-labs': true,
-    'sp-core-engineering': false,
-  });
+  // Space expansion state (for future multi-space support)
+  const [expandedSpaces, setExpandedSpaces] = useState<Record<string, boolean>>({});
 
   const toggleSpace = (spaceId: string) => {
     setExpandedSpaces((prev) => ({
@@ -260,63 +255,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="space-y-1">
-              {isDemoMode ? (
-                sampleSpaces.map((space) => {
-                  const isExpanded = expandedSpaces[space.id];
-                  return (
-                    <div key={space.id} className="space-y-0.5">
-                      {/* Space Row */}
-                      <button
-                        onClick={() => toggleSpace(space.id)}
-                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#849E8E] hover:text-white hover:bg-[#06351F] transition-colors group"
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          {isExpanded ? (
-                            <ChevronDown className="w-3 h-3 text-[#849E8E] shrink-0" />
-                          ) : (
-                            <ChevronRight className="w-3 h-3 text-[#849E8E] shrink-0" />
-                          )}
-                          <Briefcase className="w-3.5 h-3.5 text-[#849E8E] group-hover:text-white" />
-                          <span className="truncate">{space.name}</span>
-                        </div>
-                        <span className="text-[10px] bg-[#12452C] text-[#849E8E] px-1.5 py-0.2 rounded-full">
-                          {space.projects?.length || 0}
-                        </span>
-                      </button>
-
-                      {/* Sub-projects list */}
-                      {isExpanded && space.projects && (
-                        <div className="pl-6 space-y-0.5">
-                          {space.projects.map((proj) => {
-                            const projHref = `/w/${slug}/projects/${proj.id}`;
-                            const isProjActive = pathname.startsWith(projHref);
-
-                            return (
-                              <Link
-                                key={proj.id}
-                                href={projHref}
-                                className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 group relative ${
-                                  isProjActive
-                                    ? 'bg-[#175235] text-white font-semibold'
-                                    : 'text-[#D2DFD7] hover:bg-[#06351F] hover:text-white'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 truncate">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[#20E34A] shrink-0" />
-                                  <span className="truncate">{proj.name}</span>
-                                </div>
-                                <span className="text-[10px] font-mono text-[#849E8E] px-1 py-0.2 rounded bg-[#06351F] shrink-0">
-                                  {proj.key}
-                                </span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              ) : sidebarProjects.length === 0 ? (
+              {sidebarProjects.length === 0 ? (
                 <div className="px-3 py-2 text-center bg-[#06351F]/40 border border-[#14482E] rounded-xl space-y-1.5">
                   <p className="text-[11px] text-[#849E8E]">No projects yet</p>
                   <button

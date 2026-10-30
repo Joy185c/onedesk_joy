@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
 import { Task, TaskStatus, TaskPriority, UserProfile } from '@/lib/types';
-import { sampleUsers } from '@/lib/mockData';
 import { triggerAutomations } from '@/lib/services/automationService';
 
 export interface CreateTaskInput {
@@ -333,8 +332,8 @@ export async function decideReview(
 }
 
 export async function getWorkspaceMembers(workspaceId: string): Promise<UserProfile[]> {
-  if (!workspaceId || workspaceId.startsWith('ws-')) {
-    return sampleUsers;
+  if (!workspaceId) {
+    return [];
   }
 
   const supabase = createClient();

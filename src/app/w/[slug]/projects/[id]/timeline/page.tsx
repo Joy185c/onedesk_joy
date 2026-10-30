@@ -6,7 +6,6 @@ import { ProjectHeader } from '@/components/project/ProjectHeader';
 import { CreateTaskModal } from '@/components/task/CreateTaskModal';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer';
 import { Task, ProjectSummary } from '@/lib/types';
-import { sampleProjects } from '@/lib/mockData';
 import { getProjectById } from '@/lib/services/projectService';
 import { getProjectTasks } from '@/lib/services/taskService';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -16,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 export default function ProjectTimelinePage() {
   const params = useParams();
   const projectId = params?.id as string;
-  const { workspace, isDemoMode } = useWorkspace();
+  const { workspace } = useWorkspace();
 
   const [project, setProject] = useState<ProjectSummary | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -26,17 +25,13 @@ export default function ProjectTimelinePage() {
 
   const loadData = async () => {
     try {
-      if (isDemoMode || projectId.startsWith('prj-') || projectId.startsWith('proj-')) {
-        const p = sampleProjects.find((sp) => sp.id === projectId) || sampleProjects[0];
-        setProject(p);
-      } else {
-        const rawProj = await getProjectById(projectId);
-        if (!rawProj) {
-          setProject(null);
-          setLoading(false);
-          return;
-        }
-        const rawTasks = await getProjectTasks(projectId);
+      const rawProj = await getProjectById(projectId);
+      if (!rawProj) {
+        setProject(null);
+        setLoading(false);
+        return;
+      }
+      const rawTasks = await getProjectTasks(projectId);
         setProject({
           id: rawProj.id,
           key: rawProj.key,
@@ -59,7 +54,6 @@ export default function ProjectTimelinePage() {
           },
         });
         setTasks(rawTasks);
-      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -69,7 +63,7 @@ export default function ProjectTimelinePage() {
 
   useEffect(() => {
     loadData();
-  }, [projectId, isDemoMode]);
+  }, [projectId]);
 
   if (loading || !project) {
     return <div className="p-8 text-center text-xs text-[#778079]">Loading timeline roadmap...</div>;

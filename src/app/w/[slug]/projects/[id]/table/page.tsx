@@ -6,7 +6,6 @@ import { ProjectHeader } from '@/components/project/ProjectHeader';
 import { TaskTableView } from '@/components/project/TaskTableView';
 import { CreateTaskModal } from '@/components/task/CreateTaskModal';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer';
-import { sampleProjects, sampleTasks } from '@/lib/mockData';
 import { ProjectSummary, Task } from '@/lib/types';
 import { getProjectById } from '@/lib/services/projectService';
 import { getProjectTasks } from '@/lib/services/taskService';
@@ -15,7 +14,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 export default function ProjectTablePage() {
   const params = useParams();
   const projectId = params?.id as string;
-  const { workspace, isDemoMode } = useWorkspace();
+  const { workspace } = useWorkspace();
 
   const [project, setProject] = useState<ProjectSummary | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -25,18 +24,13 @@ export default function ProjectTablePage() {
 
   const loadData = async () => {
     try {
-      if (isDemoMode || projectId.startsWith('prj-')) {
-        const p = sampleProjects.find((sp) => sp.id === projectId) || sampleProjects[0];
-        setProject(p);
-        setTasks(sampleTasks.filter((st) => st.projectId === p.id));
-      } else {
-        const rawProj = await getProjectById(projectId);
-        if (!rawProj) {
-          setProject(null);
-          setLoading(false);
-          return;
-        }
-        const rawTasks = await getProjectTasks(projectId);
+      const rawProj = await getProjectById(projectId);
+      if (!rawProj) {
+        setProject(null);
+        setLoading(false);
+        return;
+      }
+      const rawTasks = await getProjectTasks(projectId);
 
         setProject({
           id: rawProj.id,
@@ -98,7 +92,6 @@ export default function ProjectTablePage() {
           },
         });
         setTasks(rawTasks);
-      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -108,7 +101,7 @@ export default function ProjectTablePage() {
 
   useEffect(() => {
     loadData();
-  }, [projectId, isDemoMode]);
+  }, [projectId]);
 
   if (!project) return null;
 

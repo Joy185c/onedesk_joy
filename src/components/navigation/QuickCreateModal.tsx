@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { X, CheckSquare, Briefcase, Calendar, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { sampleProjects } from '@/lib/mockData';
 import { createProject, getWorkspaceProjects } from '@/lib/services/projectService';
 import { createTask } from '@/lib/services/taskService';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -37,10 +36,7 @@ export const QuickCreateModal: React.FC<QuickCreateModalProps> = ({
 
   useEffect(() => {
     async function loadProjects() {
-      if (isDemoMode) {
-        setAvailableProjects(sampleProjects);
-        setSelectedProjectId(sampleProjects[0].id);
-      } else if (workspace.id) {
+      if (workspace.id) {
         const projs = await getWorkspaceProjects(workspace.id);
         if (projs.length > 0) {
           setAvailableProjects(projs);
@@ -54,7 +50,7 @@ export const QuickCreateModal: React.FC<QuickCreateModalProps> = ({
     if (isOpen) {
       loadProjects();
     }
-  }, [isOpen, workspace.id, isDemoMode]);
+  }, [isOpen, workspace.id]);
 
   if (!isOpen) return null;
 

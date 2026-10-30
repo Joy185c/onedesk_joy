@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { UserProfile, Workspace, WorkspaceRole } from '@/lib/types';
-import { currentUser as mockUser, currentWorkspace as mockWorkspace } from '@/lib/mockData';
 import { invalidateCache } from '@/lib/cache';
 
 export interface WorkspaceContextType {
@@ -65,11 +64,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (currentFetchId !== fetchIdRef.current) return;
 
       if (!authUser) {
-        // Unauthenticated visitor
+        // Unauthenticated visitor — allow demo-only workspace
         if (slug === 'factor-labs') {
           setIsDemoMode(true);
-          setUser(mockUser);
-          setWorkspace(mockWorkspace);
+          setUser({
+            id: 'demo-user',
+            name: 'Demo User',
+            email: 'demo@factor-labs.com',
+            initials: 'DU',
+            role: 'Workspace Owner',
+            status: 'online',
+          });
+          setWorkspace({
+            id: 'ws-demo',
+            name: 'Factor Labs',
+            slug: 'factor-labs',
+            ownerId: 'demo-user',
+            membersCount: 6,
+            projectsCount: 5,
+          });
           setRole('owner');
         } else {
           router.push('/login');
@@ -180,10 +193,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           projectsCount: projectCountResult.count || 0,
         });
       } else if (slug === 'factor-labs') {
-        // Fallback to sample demo if viewing factor-labs
+        // Fallback to inline demo if viewing factor-labs
         setIsDemoMode(true);
         setRole('owner');
-        setWorkspace(mockWorkspace);
+        setWorkspace({
+          id: 'ws-demo',
+          name: 'Factor Labs',
+          slug: 'factor-labs',
+          ownerId: authUser.id,
+          membersCount: parsedWorkspaces.length || 6,
+          projectsCount: 5,
+        });
       } else {
         if (parsedWorkspaces.length > 0) {
           router.push(`/w/${parsedWorkspaces[0].slug}`);
